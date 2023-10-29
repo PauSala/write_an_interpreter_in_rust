@@ -1,6 +1,6 @@
 pub mod types;
 
-use self::types::{Boolean, Integer, Null, Object};
+use self::types::{Boolean, Integer, Null, Object, ReturnValue};
 use crate::parser::ast_nodes::{
     expressions::{Expression, IfExpression},
     statements::Statement,
@@ -11,6 +11,11 @@ pub fn eval_statements(statements: &Vec<Statement>) -> Result<Object, String> {
     let mut result: Result<Object, String> = Err("No statement found".to_string());
     for statement in statements {
         result = eval(AstNode::Statement(statement));
+        if let Ok(uw) = &result {
+            if let Object::ReturnValue(value) = uw {
+                return Ok(*value.clone().value);
+            }
+        }
     }
     result
 }
@@ -133,8 +138,16 @@ pub fn eval(node: AstNode) -> Result<Object, String> {
                     .expect("Some expression expected!")
                     .as_ref(),
             )),
+            Statement::ReturnStatement(return_stmt) => {
+                let result = eval(AstNode::Expression(
+                    return_stmt.return_value.clone().unwrap().as_ref(),
+                ));
+                println!("ReturnStatement {:?}", result);
+                Ok(Object::ReturnValue(ReturnValue {
+                    value: Box::new(result.expect("Not a return statement")),
+                }))
+            }
             Statement::LetStatement(_) => todo!(),
-            Statement::ReturnStatement(_) => todo!(),
         },
         AstNode::Expression(expression) => match expression {
             Expression::IntegerLiteral(integer_literal) => {
@@ -144,8 +157,8 @@ pub fn eval(node: AstNode) -> Result<Object, String> {
             Expression::Boolean(boolean) => eval(AstNode::Boolean(boolean)),
             Expression::InfixExpression(infix_exp) => eval(AstNode::InfixExpression(infix_exp)),
             Expression::IfExpression(if_exp) => eval(AstNode::IfExpression(if_exp)),
-            Expression::Identifier(_) => todo!(),
             Expression::BlockStatement(block_stmt) => eval(AstNode::BlockStatement(block_stmt)),
+            Expression::Identifier(_) => todo!(),
             Expression::CallExpression(_) => todo!(),
             Expression::FunctionLiteral(_) => todo!(),
         },
@@ -188,7 +201,7 @@ pub fn eval(node: AstNode) -> Result<Object, String> {
                 }
             }
         }
-        AstNode::BlockStatement(block_stmt) =>  eval_statements(&block_stmt.statements),
+        AstNode::BlockStatement(block_stmt) => eval_statements(&block_stmt.statements),
         AstNode::IfExpression(if_exp) => eval_if_expression(if_exp),
         _ => return Err(format!("Not implemented yet")),
     }
@@ -436,6 +449,33 @@ mod tests {
                 Some(integer) => test_integer_object(&evaluated, integer),
                 None => (),
             }
+        }
+    }
+
+    #[test]
+    fn test_return_statements() {
+        struct Test {
+            input: String,
+            expected: i64,
+        }
+        let tests: Vec<Test> = vec![
+            Test {
+                input: "return 10;".to_string(),
+                expected: 10,
+            },
+            Test {
+                input: "return 10; 9;".to_string(),
+                expected: 10,
+            },
+            Test {
+                input: "9; return 2 * 5; 9;".to_string(),
+                expected: 10,
+            },
+        ];
+
+        for test in tests {
+            let evaluated = test_eval(&test.input).expect("Get None instead of an Object");
+            test_integer_object(&evaluated, test.expected);
         }
     }
 }

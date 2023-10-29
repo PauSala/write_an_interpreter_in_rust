@@ -4,7 +4,7 @@ pub trait TObject: std::fmt::Debug {
     fn inspect(&self) -> String;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Integer {
     pub value: i64,
 }
@@ -15,7 +15,7 @@ impl TObject for Integer {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct Boolean {
     pub value: bool,
 }
@@ -26,7 +26,7 @@ impl TObject for Boolean {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Null {}
 
 impl TObject for Null {
@@ -36,7 +36,7 @@ impl TObject for Null {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ReturnValue {
     pub value: Box<Object>,
 }
@@ -47,7 +47,7 @@ impl TObject for ReturnValue {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Object {
     Integer(Integer),
     Boolean(Boolean),
