@@ -6,6 +6,8 @@ use crate::evaluator::types::TObject;
 use crate::lexer::Lexer;
 use crate::parser::ast_nodes::AstNode;
 use crate::parser::Parser;
+use crate::parser::ast_nodes::Node;
+
 
 fn print_parser_errors(errors: &Vec<String>) {
     if errors.len() > 0 {
@@ -40,11 +42,13 @@ pub fn start() {
         let program = parser.parse_program();
         print_parser_errors(&parser.errors);
         if parser.errors.len() == 0 {
-            /*  println!("{}\n", program.string()); */
+            println!("{}\n", program.string()); 
             let evaluated = eval(AstNode::Program(program));
-            if let Ok(evaluation) = evaluated {
-                println!("{}\n", evaluation.inspect());
+            match evaluated {
+                Ok(evaluation) =>  println!("{}\n", evaluation.inspect()),
+                Err(err) => println!("{}\n", err)
             }
+   
         }
     }
 }

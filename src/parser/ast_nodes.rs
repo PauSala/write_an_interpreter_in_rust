@@ -30,7 +30,7 @@ pub enum AstNode<'a> {
     ReturnStatement(ReturnStatement),
     Identifier(Identifier),
     PrefixExpression(&'a PrefixExpression),
-    InfixExpression(InfixExpression),
+    InfixExpression(&'a InfixExpression),
     BlockStatement(BlockStatement),
     IfExpression(IfExpression),
     FunctionLiteral(FunctionLiteral),

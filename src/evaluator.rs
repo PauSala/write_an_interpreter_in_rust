@@ -1,7 +1,6 @@
 pub mod types;
 
-
-use self::types::{Boolean, Integer, Object};
+use self::types::{Boolean, Integer, Null, Object};
 use crate::parser::ast_nodes::{expressions::Expression, statements::Statement, AstNode};
 
 pub fn eval_statements(statements: Vec<Box<Statement>>) -> Result<Object, String> {
@@ -22,20 +21,74 @@ pub fn eval_bang_operator_expression(right: &Object) -> Result<Object, String> {
     }
 }
 
-pub fn eval_minus_prefix_operator_expression(right: &Object) -> Result<Object, String> {
+pub fn eval_minus_prefix_operator_expression(right: &Object) -> Object {
     match right {
-        Object::Integer(integer) => Ok(Object::Integer(Integer {
+        Object::Integer(integer) => Object::Integer(Integer {
             value: -integer.value,
-        })),
-        _ => Err(format!("Trying to evaluate a minus expression but {:?} was found in the right arm", right )),
+        }),
+        _ => Object::Null(Null {}),
     }
 }
 
 pub fn eval_prefix_expression(operator: &str, obj: &Object) -> Result<Object, String> {
     match operator {
         "!" => eval_bang_operator_expression(obj),
-        "-" => eval_minus_prefix_operator_expression(obj),
+        "-" => Ok(eval_minus_prefix_operator_expression(obj)),
         _ => Err(format!("Wrong prefix operator: {:?}", operator)),
+    }
+}
+
+pub fn eval_integer_infix_expression(operator: &str, left: &Integer, right: &Integer) -> Object {
+    match operator {
+        "+" => Object::Integer(Integer {
+            value: left.value + right.value,
+        }),
+        "-" => Object::Integer(Integer {
+            value: left.value - right.value,
+        }),
+        "*" => Object::Integer(Integer {
+            value: left.value * right.value,
+        }),
+        "/" => Object::Integer(Integer {
+            value: left.value / right.value,
+        }),
+        "<" => Object::Boolean(Boolean {
+            value: left.value < right.value,
+        }),
+        ">" => Object::Boolean(Boolean {
+            value: left.value > right.value,
+        }),
+        "==" => Object::Boolean(Boolean {
+            value: left.value == right.value,
+        }),
+        "!=" => Object::Boolean(Boolean {
+            value: left.value != right.value,
+        }),
+        _ => Object::Null(Null {}),
+    }
+}
+
+pub fn eval_infix_expression(
+    operator: &str,
+    left: &Object,
+    right: &Object,
+) -> Result<Object, String> {
+    match (left, right) {
+        (Object::Integer(left), Object::Integer(right)) => {
+            return Ok(eval_integer_infix_expression(operator, left, right))
+        }
+        (Object::Boolean(left), Object::Boolean(right)) => {
+            match operator {
+                "==" => return Ok(Object::Boolean(Boolean {
+                    value: left.value == right.value,
+                })),
+                "!=" => return  Ok(Object::Boolean(Boolean {
+                    value: left.value != right.value,
+                })),
+                _ => return Ok(Object::Null(Null {})),
+            }
+        }
+        _ => Ok(Object::Null(Null {})),
     }
 }
 
@@ -60,9 +113,11 @@ pub fn eval(node: AstNode) -> Result<Object, String> {
                 eval(AstNode::PrefixExpression(prefix_expression))
             }
             Expression::Boolean(boolean) => eval(AstNode::Boolean(boolean)),
+            Expression::InfixExpression(infix_expression) => {
+                eval(AstNode::InfixExpression(infix_expression))
+            }
             Expression::Identifier(_) => todo!(),
             Expression::BlockStatement(_) => todo!(),
-            Expression::InfixExpression(_) => todo!(),
             Expression::IfExpression(_) => todo!(),
             Expression::CallExpression(_) => todo!(),
             Expression::FunctionLiteral(_) => todo!(),
@@ -89,7 +144,24 @@ pub fn eval(node: AstNode) -> Result<Object, String> {
                 &right.expect("Not an Object type"),
             );
         }
-        _ => return Err(format!("Not implemented yet"))
+        AstNode::InfixExpression(infix_exp) => {
+            let left = eval(AstNode::Expression(
+                infix_exp.left.as_ref().expect("Not a left Expression"),
+            ));
+            let right = eval(AstNode::Expression(
+                infix_exp.right.as_ref().expect("Not a left Expression"),
+            ));
+
+            match (left, right) {
+                (Ok(left), Ok(right)) => {
+                    return eval_infix_expression(&infix_exp.operator, &left, &right)
+                }
+                (Err(_), _) | (_, Err(_)) => {
+                    return Err("InfixExpression with error in some arms".to_string())
+                }
+            }
+        }
+        _ => return Err(format!("Not implemented yet")),
     }
 }
 
@@ -124,20 +196,36 @@ mod tests {
         }
         let tests: Vec<Test> = vec![
             Test {
-                expected: 5,
                 input: "5".to_string(),
+                expected: 5,
             },
             Test {
-                expected: 10,
-                input: "10".to_string(),
-            },
-            Test {
-                expected: -5,
                 input: "-5".to_string(),
+                expected: -5,
             },
             Test {
-                expected: -10,
-                input: "-10".to_string(),
+                input: "5 + 5 + 5 + 5 - 10".to_string(),
+                expected: 10,
+            },
+            Test {
+                input: "2 * 2 * 2 * 2 * 2".to_string(),
+                expected: 32,
+            },
+            Test {
+                input: "20 + 2 * -10".to_string(),
+                expected: 0,
+            },
+            Test {
+                input: "50 / 2 * 2 + 10".to_string(),
+                expected: 60,
+            },
+            Test {
+                input: "3 * (3 * 3) + 10".to_string(),
+                expected: 37,
+            },
+            Test {
+                input: "(5 + 10 * 2 + 15 / 3) * 2 + -10".to_string(),
+                expected: 50,
             },
         ];
         for test in tests {
@@ -161,12 +249,72 @@ mod tests {
         }
         let tests: Vec<Test> = vec![
             Test {
-                expected: true,
                 input: "true".to_string(),
+                expected: true,
             },
             Test {
-                expected: false,
                 input: "false".to_string(),
+                expected: false,
+            },
+            Test {
+                input: "1 < 2".to_string(),
+                expected: true,
+            },
+            Test {
+                input: "1 > 2".to_string(),
+                expected: false,
+            },
+            Test {
+                input: "1 == 1".to_string(),
+                expected: true,
+            },
+            Test {
+                input: "1 != 1".to_string(),
+                expected: false,
+            },
+            Test {
+                input: "1 == 2".to_string(),
+                expected: false,
+            },
+            Test {
+                input: "1 != 2".to_string(),
+                expected: true,
+            },
+            Test {
+                input: "true != true".to_string(),
+                expected: false,
+            },
+            Test {
+                input: "true == true".to_string(),
+                expected: true,
+            },
+            Test {
+                input: "false == false".to_string(),
+                expected: true,
+            },
+            Test {
+                input: "true != false".to_string(),
+                expected: true,
+            },
+            Test {
+                input: "false != true".to_string(),
+                expected: true,
+            },
+            Test {
+                input: "(1 < 2) == true".to_string(),
+                expected: true,
+            },
+            Test {
+                input: "(1 < 2) == false".to_string(),
+                expected: false,
+            },
+            Test {
+                input: "(1 > 2) == true".to_string(),
+                expected: false,
+            },
+            Test {
+                input: "(1 > 2) == false".to_string(),
+                expected: true,
             },
         ];
 
