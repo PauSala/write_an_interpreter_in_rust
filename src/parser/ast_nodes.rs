@@ -21,11 +21,11 @@ pub trait Node: std::fmt::Debug {
 }
 
 #[derive(Debug)]
-pub enum AstNode {
+pub enum AstNode<'a> {
     Program(Program),
     ExpressionStatement(ExpressionStatement),
-    IntegerLiteral(IntegerLiteral),
-    Boolean(Boolean),
+    IntegerLiteral(&'a IntegerLiteral),
+    Boolean(&'a Boolean),
     LetStatement(LetStatement),
     ReturnStatement(ReturnStatement),
     Identifier(Identifier),
@@ -36,9 +36,10 @@ pub enum AstNode {
     FunctionLiteral(FunctionLiteral),
     CallExpression(CallExpression),
     Statement(Statement),
+    Expression(&'a Expression)
 }
 
-impl Node for AstNode{
+impl Node for AstNode<'_>{
 
     fn token_literal(&self) -> String {
         match self {
@@ -56,6 +57,7 @@ impl Node for AstNode{
             AstNode::FunctionLiteral(inner) => inner.token_literal(),
             AstNode::CallExpression(inner) => inner.token_literal(),
             AstNode::Statement(inner) => inner.token_literal(), 
+            AstNode::Expression(inner) => inner.token_literal()
         }
     }
 
@@ -75,6 +77,7 @@ impl Node for AstNode{
             AstNode::FunctionLiteral(inner) => inner.string(),
             AstNode::CallExpression(inner) => inner.string(),
             AstNode::Statement(inner) => inner.string(), 
+            AstNode::Expression(inner) => inner.string()
         }
     }
 }
