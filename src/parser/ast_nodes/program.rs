@@ -1,9 +1,10 @@
-use super::ast::{Node, Statement, NodeType};
+use super::{statements::Statement, Node};
 
 #[derive(Debug)]
 pub struct Program {
-    pub statements: Vec<Box<dyn Statement>>,
+    pub statements: Vec<Box<Statement>>,
 }
+
 impl Program {
     pub fn new() -> Self {
         Program {
@@ -11,12 +12,13 @@ impl Program {
         }
     }
 }
+
 impl Node for Program {
-    fn token_literal(&self) -> Option<String> {
+    fn token_literal(&self) -> String {
         if !self.statements.is_empty() {
             self.statements[0].token_literal()
         } else {
-            None
+            "".to_string()
         }
     }
     fn string(&self) -> String {
@@ -26,8 +28,5 @@ impl Node for Program {
             buffer.push_str(&value)
         }
         buffer
-    }
-    fn node_type(&self) -> NodeType {
-        NodeType::Program
     }
 }

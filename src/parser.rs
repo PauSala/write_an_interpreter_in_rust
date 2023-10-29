@@ -1,9 +1,6 @@
-pub mod ast;
+pub mod ast_nodes;
 pub mod parser_functions;
 pub mod precedence;
-pub mod program;
-pub mod statements;
-pub mod ast_nodes;
 use std::{collections::HashMap, rc::Rc};
 
 use crate::{
@@ -12,18 +9,18 @@ use crate::{
 };
 
 use self::{
-    ast::{Expression, InfixParseFn, PrefixParseFn, Statement},
+    ast_nodes::{
+        expressions::{Expression, Identifier},
+        program::Program,
+        statements::{ExpressionStatement, LetStatement, ReturnStatement, Statement},
+        InfixParseFn, PrefixParseFn,
+    },
     parser_functions::{
         parse_boolean, parse_call_expression, parse_function_literal, parse_grouped_expression,
         parse_identifier, parse_if_expression, parse_infix_expression, parse_integer_literal,
         parse_prefix_expression,
     },
     precedence::Precedence,
-    program::Program,
-    statements::{
-        expression_statement::ExpressionStatement, expressions::Identifier,
-        let_statement::LetStatement, return_statement::ReturnStatement,
-    },
 };
 
 pub struct Parser<'a> {
@@ -119,7 +116,7 @@ impl Parser<'_> {
         }
     }
 
-    pub fn parse_statement(&mut self) -> Option<Box<dyn Statement>> {
+    pub fn parse_statement(&mut self) -> Option<Box<Statement>> {
         match &self.current_token {
             None => None,
             Some(token) => match token.token_type {
@@ -130,7 +127,7 @@ impl Parser<'_> {
         }
     }
 
-    pub fn parse_expression_statement(&mut self) -> Option<Box<dyn Statement>> {
+    pub fn parse_expression_statement(&mut self) -> Option<Box<Statement>> {
         if let Some(current_token) = &self.current_token {
             let token = current_token.clone();
             let statement_exp = self.parse_expression(Precedence::LOWEST);
@@ -143,13 +140,13 @@ impl Parser<'_> {
             if self.peek_token_is(TokenType::SEMICOLON) {
                 self.next_token();
             }
-            Some(Box::new(statement))
+            Some(Box::new(Statement::ExpressionStatement(statement)))
         } else {
             None
         }
     }
 
-    pub fn parse_expression(&mut self, precedence: Precedence) -> Option<Rc<dyn Expression>> {
+    pub fn parse_expression(&mut self, precedence: Precedence) -> Option<Rc<Expression>> {
         if let Some(token) = &self.current_token {
             let prefix_fn = self.prefix_parse_fns.get_mut(&token.token_type);
 
@@ -187,7 +184,7 @@ impl Parser<'_> {
         self.errors.push(message);
     }
 
-    pub fn parse_return_statement(&mut self) -> Option<Box<dyn Statement>> {
+    pub fn parse_return_statement(&mut self) -> Option<Box<Statement>> {
         if let Some(current_token) = &self.current_token {
             let return_token = current_token.clone();
             self.next_token();
@@ -201,13 +198,13 @@ impl Parser<'_> {
             if self.peek_token_is(TokenType::SEMICOLON) {
                 self.next_token();
             }
-            return Some(Box::new(return_statement));
+            return Some(Box::new(Statement::ReturnStatement(return_statement)));
         } else {
             None
         }
     }
 
-    pub fn parse_let_statement(&mut self) -> Option<Box<dyn Statement>> {
+    pub fn parse_let_statement(&mut self) -> Option<Box<Statement>> {
         if let Some(current_token) = &self.current_token {
             let let_token = current_token.clone();
 
@@ -247,7 +244,7 @@ impl Parser<'_> {
                 self.next_token();
             }
 
-            Some(Box::new(statement))
+            Some(Box::new(Statement::LetStatement(statement)))
         } else {
             None
         }
@@ -329,6 +326,10 @@ impl Parser<'_> {
             if token.token_type == TokenType::EOF {
                 break;
             }
+            if token.token_type == TokenType::ILLEGAL {
+                self.errors.push(format!("Illegal token recieved: {:?}", token.literal));
+                 break;
+            }
             let statement = self.parse_statement();
             if let Some(statemet) = statement {
                 program.statements.push(statemet);
@@ -341,10 +342,21 @@ impl Parser<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ast::Node, *};
-    use crate::parser::statements::expressions::{
-        CallExpression, FunctionLiteral, IfExpression, InfixExpression, IntegerLiteral,
-        PrefixExpression,
+
+    use std::rc::Rc;
+
+    use crate::{
+        lexer::Lexer,
+        parser::ast_nodes::{program::Program, Node},
+        token::{Token, TokenType},
+    };
+
+    use super::{
+        ast_nodes::{
+            expressions::{Expression, Identifier},
+            statements::{LetStatement, Statement},
+        },
+        Parser,
     };
 
     pub enum Expected {
@@ -352,42 +364,33 @@ mod tests {
         StringExpected(String),
     }
 
-    fn test_integer_literal(exp: &Option<Rc<dyn Expression>>, value: u64) {
+    fn test_integer_literal(exp: &Option<Rc<Expression>>, value: u64) {
         match exp {
             None => panic!("No expression, got None"),
-            Some(exp) => {
-                let identifier: Option<&IntegerLiteral> = exp.as_any().downcast_ref();
-                match identifier {
-                    None => panic!("Not an IntegerLiteral, got None"),
-                    Some(integer_literal) => {
-                        assert_eq!(integer_literal.value, value);
-                        assert_eq!(
-                            format!("{}", value),
-                            integer_literal.token_literal().unwrap()
-                        )
-                    }
+            Some(exp) => match exp.as_ref() {
+                Expression::IntegerLiteral(integer_literal) => {
+                    assert_eq!(integer_literal.value, value);
+                    assert_eq!(format!("{}", value), integer_literal.token_literal())
                 }
-            }
+                _ => panic!("Expecting an IntegerLiteral, got {:?}", exp),
+            },
         }
     }
 
-    pub fn test_identifier(exp: &Option<Rc<dyn Expression>>, value: &str) {
+    pub fn test_identifier(exp: &Option<Rc<Expression>>, value: &str) {
         match exp {
             None => panic!("No expression, got None"),
-            Some(exp) => {
-                let identifier: Option<&Identifier> = exp.as_any().downcast_ref();
-                match identifier {
-                    None => panic!("Not an Identifier, got None"),
-                    Some(identifier) => {
-                        assert_eq!(identifier.value, value);
-                        assert_eq!(format!("{}", value), identifier.token_literal().unwrap())
-                    }
+            Some(exp) => match exp.as_ref() {
+                Expression::Identifier(identifier) => {
+                    assert_eq!(identifier.value, value);
+                    assert_eq!(format!("{}", value), identifier.token_literal())
                 }
-            }
+                _ => panic!("Expecting an Identifier, got {:?}", exp),
+            },
         }
     }
 
-    pub fn test_literal_expression(exp: &Option<Rc<dyn Expression>>, expected: Expected) {
+    pub fn test_literal_expression(exp: &Option<Rc<Expression>>, expected: Expected) {
         match expected {
             Expected::IntExpected(value) => test_integer_literal(exp, value),
             Expected::StringExpected(value) => test_identifier(exp, &value),
@@ -395,50 +398,46 @@ mod tests {
     }
 
     pub fn test_infix_expression(
-        exp: &Option<Rc<dyn Expression>>,
+        exp: &Option<Rc<Expression>>,
         left: Expected,
         operator: &str,
         right: Expected,
     ) {
         match exp {
             None => panic!("Not an expression, got None"),
-            Some(expression) => {
-                let infix_exp: Option<&InfixExpression> = expression.as_any().downcast_ref();
-                match infix_exp {
-                    None => panic!("Not an InfixExpression"),
-                    Some(op_exp) => {
-                        test_literal_expression(&op_exp.left, left);
-                        assert_eq!(op_exp.operator, operator);
-                        test_literal_expression(&op_exp.right, right);
-                    }
+            Some(expression) => match expression.as_ref() {
+                Expression::InfixExpression(op_exp) => {
+                    test_literal_expression(&op_exp.left, left);
+                    assert_eq!(op_exp.operator, operator);
+                    test_literal_expression(&op_exp.right, right);
                 }
-            }
+                _ => panic!("Expected an InfixExpression, got {:?}", expression),
+            },
         }
     }
 
-    pub fn test_let_statement(statement: &Box<dyn Statement>, expected_identifier: &str) -> bool {
-        match statement.as_ref().token_literal() {
-            None => panic!("Token literal missing!"),
-            Some(token_literal) => {
-                if token_literal != "let" {
-                    panic!("s.TokenLiteral not 'let'. got={}", token_literal);
+    pub fn test_let_statement(statement: &Box<Statement>, expected_identifier: &str) -> bool {
+        let token_literal = statement.as_ref().token_literal();
+        if token_literal != "let" {
+            panic!("s.TokenLiteral not 'let'. got={}", token_literal);
+        }
+        match statement.as_ref() {
+            Statement::LetStatement(let_statement) => {
+                if let_statement.name.value != expected_identifier {
+                    panic!(
+                        "let_statement.name.value not {}, got {}",
+                        expected_identifier, let_statement.name.value
+                    );
+                };
+                let token_literal = let_statement.name.token_literal();
+                if token_literal != expected_identifier {
+                    panic!(
+                        "let_statement.name.token_literal() not {}, got {}",
+                        expected_identifier, token_literal
+                    );
                 }
             }
-        }
-        let let_statement: &LetStatement = statement.as_any().downcast_ref().expect("Not a letStatement");
-        if let_statement.name.value != expected_identifier {
-            panic!(
-                "let_statement.name.value not {}, got {}",
-                expected_identifier, let_statement.name.value
-            );
-        }
-        if let Some(token_literal) = let_statement.name.token_literal() {
-            if token_literal != expected_identifier {
-                panic!(
-                    "let_statement.name.token_literal() not {}, got {}",
-                    expected_identifier, token_literal
-                );
-            }
+            _ => panic!("Expecting an IntegerLiteral, got {:?}", statement),
         }
         true
     }
@@ -501,16 +500,17 @@ mod tests {
         }
 
         for boxed in program.statements {
-            let statement: &ReturnStatement = boxed
-                .as_any()
-                .downcast_ref()
-                .expect("Not a return Statement");
-            let token_literal = statement.token_literal().expect("Not a token literal");
-            if token_literal != "return" {
-                panic!(
-                    "return_statement.token_literal() not 'return', got {}",
-                    token_literal
-                );
+            match boxed.as_ref() {
+                Statement::ReturnStatement(statement) => {
+                    let token_literal = statement.token_literal();
+                    if token_literal != "return" {
+                        panic!(
+                            "return_statement.token_literal() not 'return', got {}",
+                            token_literal
+                        );
+                    }
+                }
+                _ => panic!("Not a return Statement: {:?}", boxed),
             }
         }
     }
@@ -518,7 +518,7 @@ mod tests {
     #[test]
     pub fn it_should_build_program_string() {
         let program = Program {
-            statements: vec![Box::new(LetStatement {
+            statements: vec![Box::new(Statement::LetStatement(LetStatement {
                 token: Token {
                     token_type: TokenType::LET,
                     literal: "let".to_string(),
@@ -530,18 +530,19 @@ mod tests {
                     },
                     value: "some_var".to_string(),
                 },
-                value: Some(Rc::new(Identifier {
+                value: Some(Rc::new(Expression::Identifier(Identifier {
                     token: Token {
                         token_type: TokenType::IDENT,
                         literal: "other_var".to_string(),
                     },
                     value: "other_var".to_string(),
-                })),
-            })],
+                }))),
+            }))],
         };
 
         assert_eq!(program.string(), "let some_var=other_var;")
     }
+
     #[test]
     fn it_should_parse_identifier_expressions() {
         let input = "foobar;";
@@ -550,21 +551,21 @@ mod tests {
         check_parser_errors(&mut parser);
         let program = parser.parse_program();
         assert_eq!(1, program.statements.len());
-
-        let statement: &ExpressionStatement = program.statements[0]
-            .as_any()
-            .downcast_ref()
-            .expect("Not an ExpressionStatement");
-        let expression = statement
-            .expression
-            .as_ref()
-            .expect("Not an ExpressionStatement");
-        let identifier: &Identifier = expression
-            .as_any()
-            .downcast_ref()
-            .expect("Not an Identifier");
-        assert_eq!(identifier.value, "foobar");
-        assert_eq!(identifier.token_literal().unwrap(), "foobar");
+        if let Statement::ExpressionStatement(expression) = program.statements[0].as_ref() {
+            if let Expression::Identifier(identifier) = expression
+                .expression
+                .as_ref()
+                .expect("Received None!")
+                .as_ref()
+            {
+                assert_eq!(identifier.value, "foobar");
+                assert_eq!(identifier.token_literal(), "foobar");
+            } else {
+                panic!("Not an identifier");
+            }
+        } else {
+            panic!("Not an ExpressionStatement");
+        }
     }
 
     #[test]
@@ -576,20 +577,21 @@ mod tests {
         let program = parser.parse_program();
         assert_eq!(1, program.statements.len());
 
-        let statement: &ExpressionStatement = program.statements[0]
-            .as_any()
-            .downcast_ref()
-            .expect("Not an ExpressionStatement");
-        let expression = statement
-            .expression
-            .as_ref()
-            .expect("Not an ExpressionStatement");
-        let identifier: &IntegerLiteral = expression
-            .as_any()
-            .downcast_ref()
-            .expect("Not an IntegerLiteral");
-        assert_eq!(identifier.value, 5);
-        assert_eq!(identifier.token_literal().unwrap(), "5");
+        if let Statement::ExpressionStatement(expression) = program.statements[0].as_ref() {
+            if let Expression::IntegerLiteral(identifier) = expression
+                .expression
+                .as_ref()
+                .expect("Received None!")
+                .as_ref()
+            {
+                assert_eq!(identifier.value, 5);
+                assert_eq!(identifier.token_literal(), "5");
+            } else {
+                panic!("Not an IntegerLiteral");
+            }
+        } else {
+            panic!("Not an ExpressionStatement");
+        }
     }
 
     #[test]
@@ -620,20 +622,21 @@ mod tests {
             let program = parser.parse_program();
             assert_eq!(1, program.statements.len());
 
-            let statement: &ExpressionStatement = program.statements[0]
-                .as_any()
-                .downcast_ref()
-                .expect("Not an ExpressionStatement");
-            let prefix_expression = statement
-                .expression
-                .as_ref()
-                .expect("Not an ExpressionStatement");
-            let identifier: &PrefixExpression = prefix_expression
-                .as_any()
-                .downcast_ref()
-                .expect("Not a PrefixExpression");
-            assert_eq!(identifier.operator, test.operator);
-            test_literal_expression(&identifier.right, Expected::IntExpected(test.value));
+            if let Statement::ExpressionStatement(expression) = program.statements[0].as_ref() {
+                if let Expression::PrefixExpression(identifier) = expression
+                    .expression
+                    .as_ref()
+                    .expect("Received None!")
+                    .as_ref()
+                {
+                    assert_eq!(identifier.operator, test.operator);
+                    test_literal_expression(&identifier.right, Expected::IntExpected(test.value));
+                } else {
+                    panic!("Not an IntegerLiteral");
+                }
+            } else {
+                panic!("Not an ExpressionStatement");
+            }
         }
     }
 
@@ -717,14 +720,10 @@ mod tests {
             check_parser_errors(&mut parser);
             let program = parser.parse_program();
             assert_eq!(1, program.statements.len());
-            let statement: Option<&ExpressionStatement> =
-                program.statements[0].as_any().downcast_ref();
-            match statement {
-                None => panic!("Not an expressionStatement"),
-                Some(statement) => {
-                    let boxed = &statement.expression;
-                    test_infix_expression(boxed, test.left_value, &test.operator, test.rigth_value);
-                }
+
+            if let Statement::ExpressionStatement(statement) = program.statements[0].as_ref() {
+                let boxed = &statement.expression;
+                test_infix_expression(boxed, test.left_value, &test.operator, test.rigth_value);
             }
         }
     }
@@ -776,51 +775,52 @@ mod tests {
         check_parser_errors(&mut parser);
         let program = parser.parse_program();
         assert_eq!(1, program.statements.len());
-        let statement: Option<&ExpressionStatement> = program.statements[0].as_any().downcast_ref();
-        let function_literal: &FunctionLiteral = statement
-            .expect("Not an expression Statement")
-            .expression
-            .as_ref()
-            .expect("Not an expression Statement")
-            .as_any()
-            .downcast_ref()
-            .expect("Not a function literal");
 
-        assert_eq!(function_literal.parameters.len(), 2);
-        let param1 = function_literal.parameters[0].clone();
-        let param2 = function_literal.parameters[1].clone();
-        test_literal_expression(
-            &Some(Rc::new(param1)),
-            Expected::StringExpected('x'.to_string()),
-        );
-        test_literal_expression(
-            &Some(Rc::new(param2)),
-            Expected::StringExpected('y'.to_string()),
-        );
-
-        assert_eq!(
-            function_literal
-                .body
+        if let Statement::ExpressionStatement(statement) = program.statements[0].as_ref() {
+            if let Expression::FunctionLiteral(function_literal) = statement
+                .expression
                 .as_ref()
-                .expect("None instead of body")
-                .statements
-                .len(),
-            1
-        );
-        let stmt: &ExpressionStatement = function_literal
-            .body
-            .as_ref()
-            .expect("Recieved 'None' instead of function body")
-            .statements[0]
-            .as_any()
-            .downcast_ref()
-            .expect("Not an expression statement");
-        test_infix_expression(
-            &stmt.expression,
-            Expected::StringExpected("x".to_string()),
-            "+",
-            Expected::StringExpected("y".to_string()),
-        )
+                .expect("Received None!")
+                .as_ref()
+            {
+                assert_eq!(function_literal.parameters.len(), 2);
+                let param1 = function_literal.parameters[0].clone();
+                let param2 = function_literal.parameters[1].clone();
+                test_literal_expression(
+                    &Some(Rc::new(Expression::Identifier(param1))),
+                    Expected::StringExpected('x'.to_string()),
+                );
+                test_literal_expression(
+                    &Some(Rc::new(Expression::Identifier(param2))),
+                    Expected::StringExpected('y'.to_string()),
+                );
+                assert_eq!(
+                    function_literal
+                        .body
+                        .as_ref()
+                        .expect("None instead of body")
+                        .statements
+                        .len(),
+                    1
+                );
+
+                let stmt = &function_literal
+                    .body
+                    .as_ref()
+                    .expect("Not a blockStatement")
+                    .statements[0];
+                if let Statement::ExpressionStatement(stmt) = stmt {
+                    test_infix_expression(
+                        &stmt.expression,
+                        Expected::StringExpected("x".to_string()),
+                        "+",
+                        Expected::StringExpected("y".to_string()),
+                    )
+                }
+            } else {
+                panic!("Not a FunctionLiteral")
+            }
+        }
     }
 
     #[test]
@@ -831,33 +831,34 @@ mod tests {
         check_parser_errors(&mut parser);
         let program = parser.parse_program();
         assert_eq!(1, program.statements.len());
-        let statement: Option<&ExpressionStatement> = program.statements[0].as_any().downcast_ref();
-        let call_expression: &CallExpression = statement
-            .expect("Not an expression Statement")
-            .expression
-            .as_ref()
-            .expect("Not an expression Statement")
-            .as_any()
-            .downcast_ref()
-            .expect("Not a CallExpression");
-        test_identifier(&Some(call_expression.function.clone()), "add");
-        assert_eq!(call_expression.args.len(), 3);
-        test_literal_expression(
-            &Some(call_expression.args[0].clone()),
-            Expected::IntExpected(1),
-        );
-        test_infix_expression(
-            &Some(call_expression.args[1].clone()),
-            Expected::IntExpected(2),
-            "*",
-            Expected::IntExpected(3),
-        );
-        test_infix_expression(
-            &Some(call_expression.args[2].clone()),
-            Expected::IntExpected(4),
-            "+",
-            Expected::IntExpected(5),
-        );
+
+        if let Statement::ExpressionStatement(statement) = program.statements[0].as_ref() {
+            if let Expression::CallExpression(call_expression) = statement
+                .expression
+                .as_ref()
+                .expect("Recieved None!")
+                .as_ref()
+            {
+                test_identifier(&Some(call_expression.function.clone()), "add");
+                assert_eq!(call_expression.args.len(), 3);
+                test_literal_expression(
+                    &Some(call_expression.args[0].clone()),
+                    Expected::IntExpected(1),
+                );
+                test_infix_expression(
+                    &Some(call_expression.args[1].clone()),
+                    Expected::IntExpected(2),
+                    "*",
+                    Expected::IntExpected(3),
+                );
+                test_infix_expression(
+                    &Some(call_expression.args[2].clone()),
+                    Expected::IntExpected(4),
+                    "+",
+                    Expected::IntExpected(5),
+                );
+            }
+        }
     }
 
     #[test]
@@ -869,36 +870,31 @@ mod tests {
         let program = parser.parse_program();
         assert_eq!(1, program.statements.len());
 
-        let stmt: &ExpressionStatement = program.statements[0]
-            .as_any()
-            .downcast_ref()
-            .expect("Not an ExpressionStatement");
+        if let Statement::ExpressionStatement(statement) = program.statements[0].as_ref() {
+            if let Expression::IfExpression(if_expression) = statement
+                .expression
+                .as_ref()
+                .expect("Recieved None!")
+                .as_ref()
+            {
+                test_infix_expression(
+                    &if_expression.condition,
+                    Expected::StringExpected("x".to_string()),
+                    "<",
+                    Expected::StringExpected("y".to_string()),
+                );
 
-        let if_expression: &IfExpression = stmt
-            .expression
-            .as_ref()
-            .expect("Not an expression")
-            .as_any()
-            .downcast_ref()
-            .expect("Not and IfExpression");
-        test_infix_expression(
-            &if_expression.condition,
-            Expected::StringExpected("x".to_string()),
-            "<",
-            Expected::StringExpected("y".to_string()),
-        );
-        let consequence = if_expression
-            .consequence
-            .as_ref()
-            .expect("None insteat of consequence");
-        assert_eq!(consequence.statements.len(), 1);
-        let statement: &ExpressionStatement = consequence.statements[0]
-            .as_any()
-            .downcast_ref()
-            .expect("Not an ExpressionStatement");
-        test_literal_expression(
-            &statement.expression,
-            Expected::StringExpected("x".to_string()),
-        );
+                let consequence = if_expression
+                    .consequence
+                    .as_ref()
+                    .expect("None insteat of consequence");
+                if let Statement::ExpressionStatement(stmt) = &consequence.statements[0] {
+                    test_literal_expression(
+                        &stmt.expression,
+                        Expected::StringExpected("x".to_string()),
+                    );
+                }
+            }
+        }
     }
 }

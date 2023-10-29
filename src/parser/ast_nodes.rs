@@ -1,18 +1,27 @@
-use super::{
-    program::Program,
-    statements::{
-        expression_statement::ExpressionStatement,
-        expressions::{
-            BlockStatement, Boolean, CallExpression, FunctionLiteral, Identifier, IfExpression,
-            InfixExpression, IntegerLiteral, PrefixExpression,
-        },
-        let_statement::LetStatement,
-        return_statement::ReturnStatement,
-    }, ast::Statement,
+pub mod expressions;
+pub mod statements;
+pub mod program;
+use std::rc::Rc;
+
+use self::{
+    expressions::{
+        BlockStatement, Boolean, CallExpression, FunctionLiteral, Identifier, IfExpression,
+        InfixExpression, IntegerLiteral, PrefixExpression, Expression,
+    },
+    statements::{ExpressionStatement, LetStatement, ReturnStatement, Statement}, program::Program,
 };
 
+use super::Parser;
+
+
+
+pub trait Node: std::fmt::Debug {
+    fn token_literal(&self) -> String;
+    fn string(&self) -> String;
+}
+
 #[derive(Debug)]
-pub enum AstNodeType {
+pub enum AstNode {
     Program(Program),
     ExpressionStatement(ExpressionStatement),
     IntegerLiteral(IntegerLiteral),
@@ -26,10 +35,51 @@ pub enum AstNodeType {
     IfExpression(IfExpression),
     FunctionLiteral(FunctionLiteral),
     CallExpression(CallExpression),
-    Statement(Box<dyn Statement>)
+    Statement(Statement),
 }
 
-#[derive(Debug)]
-pub struct AstNode {
-    pub node: AstNodeType,
+impl Node for AstNode{
+
+    fn token_literal(&self) -> String {
+        match self {
+            AstNode::Program(inner) => inner.token_literal(),
+            AstNode::ExpressionStatement(inner) => inner.token_literal(),
+            AstNode::IntegerLiteral(inner) => inner.token_literal(),
+            AstNode::Boolean(inner) => inner.token_literal(),
+            AstNode::LetStatement(inner) => inner.token_literal(),
+            AstNode::ReturnStatement(inner) => inner.token_literal(),
+            AstNode::Identifier(inner) => inner.token_literal(),
+            AstNode::PrefixExpression(inner) => inner.token_literal(),
+            AstNode::InfixExpression(inner) => inner.token_literal(),
+            AstNode::BlockStatement(inner) => inner.token_literal(),
+            AstNode::IfExpression(inner) => inner.token_literal(),
+            AstNode::FunctionLiteral(inner) => inner.token_literal(),
+            AstNode::CallExpression(inner) => inner.token_literal(),
+            AstNode::Statement(inner) => inner.token_literal(), 
+        }
+    }
+
+    fn string(&self) -> String {
+        match self {
+            AstNode::Program(inner) => inner.string(),
+            AstNode::ExpressionStatement(inner) => inner.string(),
+            AstNode::IntegerLiteral(inner) => inner.string(),
+            AstNode::Boolean(inner) => inner.string(),
+            AstNode::LetStatement(inner) => inner.string(),
+            AstNode::ReturnStatement(inner) => inner.string(),
+            AstNode::Identifier(inner) => inner.string(),
+            AstNode::PrefixExpression(inner) => inner.string(),
+            AstNode::InfixExpression(inner) => inner.string(),
+            AstNode::BlockStatement(inner) => inner.string(),
+            AstNode::IfExpression(inner) => inner.string(),
+            AstNode::FunctionLiteral(inner) => inner.string(),
+            AstNode::CallExpression(inner) => inner.string(),
+            AstNode::Statement(inner) => inner.string(), 
+        }
+    }
 }
+
+
+pub type PrefixParseFn = fn(parser: &mut Parser) -> Option<Rc<Expression>>;
+pub type InfixParseFn =
+    fn(parser: &mut Parser, left: Rc<Expression>) -> Option<Rc<Expression>>;

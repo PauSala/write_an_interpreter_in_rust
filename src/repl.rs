@@ -2,11 +2,13 @@ use std::io;
 use std::io::Write;
 
 use crate::lexer::Lexer;
-use crate::parser::ast::Node;
 use crate::parser::Parser;
+use crate::parser::ast_nodes::Node;
 
 fn print_parser_errors(errors: &Vec<String>) {
-    println!("There are some parsing errors: ");
+    if errors.len() > 0 {
+        println!("There are some parsing errors: ");
+    }
     for error in errors {
         println!("\t{}", error);
     }
