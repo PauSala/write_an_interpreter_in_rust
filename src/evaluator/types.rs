@@ -1,14 +1,7 @@
-use std::any::Any;
 
-pub enum ObjectType {
-    INTEGER,
-    BOOLEAN,
-    NULL,
-}
-pub trait Object: std::fmt::Debug {
-    fn object_type(&self) -> ObjectType;
+
+pub trait TObject: std::fmt::Debug {
     fn inspect(&self) -> String;
-    fn as_any(&self) -> &dyn Any;
 }
 
 #[derive(Debug)]
@@ -16,49 +9,45 @@ pub struct Integer {
     pub value: u64,
 }
 
-impl Object for Integer {
+impl TObject for Integer {
     fn inspect(&self) -> String {
         format!("{}", self.value)
-    }
-
-    fn object_type(&self) -> ObjectType {
-        ObjectType::INTEGER
-    }
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 
 #[derive(Debug)]
 pub struct Boolean {
-    value: bool,
+    pub value: bool,
 }
 
-impl Object for Boolean {
+impl TObject for Boolean {
     fn inspect(&self) -> String {
         format!("{}", self.value)
-    }
-
-    fn object_type(&self) -> ObjectType {
-        ObjectType::BOOLEAN
-    }
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 
 #[derive(Debug)]
 pub struct Null {}
 
-impl Object for Null {
+impl TObject for Null {
     fn inspect(&self) -> String {
         format!("NULL")
     }
+}
 
-    fn object_type(&self) -> ObjectType {
-        ObjectType::NULL
-    }
-    fn as_any(&self) -> &dyn Any {
-        self
+#[derive(Debug)]
+pub enum Object {
+    Integer(Integer),
+    Boolean(Boolean),
+    Null(Null),
+}
+
+impl TObject for Object {
+    fn inspect(&self) -> String {
+        match self {
+            Object::Integer(inner) => inner.inspect(),
+            Object::Boolean(inner) => inner.inspect(),
+            Object::Null(inner) => inner.inspect(),
+        }
     }
 }

@@ -1,9 +1,11 @@
 use std::io;
 use std::io::Write;
 
+use crate::evaluator::eval;
+use crate::evaluator::types::TObject;
 use crate::lexer::Lexer;
+use crate::parser::ast_nodes::AstNode;
 use crate::parser::Parser;
-use crate::parser::ast_nodes::Node;
 
 fn print_parser_errors(errors: &Vec<String>) {
     if errors.len() > 0 {
@@ -28,7 +30,7 @@ pub fn start() {
         // Trim leading and trailing whitespaces
         let input = input.trim();
 
-        if input == "!q" {
+        if input == "exit" {
             println!("Goodbye!");
             break; // Exit the loop if the user types '!q'
         }
@@ -38,7 +40,11 @@ pub fn start() {
         let program = parser.parse_program();
         print_parser_errors(&parser.errors);
         if parser.errors.len() == 0 {
-            println!("{}\n", program.string());
+            /*  println!("{}\n", program.string()); */
+            let evaluated = eval(AstNode::Program(program));
+            if let Some(evaluation) = evaluated {
+                println!("{}\n", evaluation.inspect());
+            }
         }
     }
 }
