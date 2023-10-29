@@ -1,26 +1,41 @@
 pub mod types;
 
-use self::types::{Boolean, Integer, Null, Object, ReturnValue};
+use self::types::{Boolean, Error, Integer, Null, Object, ReturnValue};
 use crate::parser::ast_nodes::{
-    expressions::{Expression, IfExpression},
+    expressions::{BlockStatement, Expression, IfExpression},
     statements::Statement,
     AstNode,
 };
 
-pub fn eval_statements(statements: &Vec<Statement>) -> Result<Object, String> {
-    let mut result: Result<Object, String> = Err("No statement found".to_string());
+pub fn eval_program(statements: &Vec<Statement>) -> Result<Object, Error> {
+    let mut result: Result<Object, Error> = Err(new_error(&format!("No statement found")));
     for statement in statements {
         result = eval(AstNode::Statement(statement));
-        if let Ok(uw) = &result {
-            if let Object::ReturnValue(value) = uw {
-                return Ok(*value.clone().value);
-            }
+        match &result {
+            Ok(uw) => {
+                if let Object::ReturnValue(value) = uw {
+                    return Ok(*value.clone().value);
+                }
+            },
+            Err(_) => return result,
         }
     }
     result
 }
 
-pub fn eval_bang_operator_expression(right: &Object) -> Result<Object, String> {
+pub fn eval_block_statement(block: &BlockStatement) -> Result<Object, Error> {
+    let mut result: Result<Object, Error> = Err(new_error(&format!("No statement found")));
+    for statement in &block.statements {
+        result = eval(AstNode::Statement(&statement));
+        match &result {
+            Ok(uw) => return Ok(uw.clone()),
+            Err(_) => return result,
+        }
+    }
+    result
+}
+
+pub fn eval_bang_operator_expression(right: &Object) -> Result<Object, Error> {
     match right {
         Object::Boolean(value) => match value.value {
             true => Ok(Object::Boolean(Boolean { value: false })),
@@ -30,50 +45,62 @@ pub fn eval_bang_operator_expression(right: &Object) -> Result<Object, String> {
     }
 }
 
-pub fn eval_minus_prefix_operator_expression(right: &Object) -> Object {
+pub fn eval_minus_prefix_operator_expression(right: &Object) -> Result<Object, Error> {
     match right {
-        Object::Integer(integer) => Object::Integer(Integer {
+        Object::Integer(integer) => Ok(Object::Integer(Integer {
             value: -integer.value,
-        }),
-        _ => Object::Null(Null {}),
+        })),
+        _ => Err(new_error(&format!(
+            "unknown operator: -{}",
+            right.str_type()
+        ))),
     }
 }
 
-pub fn eval_prefix_expression(operator: &str, obj: &Object) -> Result<Object, String> {
+pub fn eval_prefix_expression(operator: &str, right: &Object) -> Result<Object, Error> {
     match operator {
-        "!" => eval_bang_operator_expression(obj),
-        "-" => Ok(eval_minus_prefix_operator_expression(obj)),
-        _ => Err(format!("Wrong prefix operator: {:?}", operator)),
+        "!" => eval_bang_operator_expression(right),
+        "-" => eval_minus_prefix_operator_expression(right),
+        _ => Err(new_error(&format!(
+            "unknown operator: {} {:?}",
+            operator,
+            right.str_type()
+        ))),
     }
 }
 
-pub fn eval_integer_infix_expression(operator: &str, left: &Integer, right: &Integer) -> Object {
+pub fn eval_integer_infix_expression(
+    operator: &str,
+    left: &Integer,
+    right: &Integer,
+) -> Result<Object, Error> {
+    println!("eval_integer_infix_expression {:?} {:?}", left, right);
     match operator {
-        "+" => Object::Integer(Integer {
+        "+" => Ok(Object::Integer(Integer {
             value: left.value + right.value,
-        }),
-        "-" => Object::Integer(Integer {
+        })),
+        "-" => Ok(Object::Integer(Integer {
             value: left.value - right.value,
-        }),
-        "*" => Object::Integer(Integer {
+        })),
+        "*" => Ok(Object::Integer(Integer {
             value: left.value * right.value,
-        }),
-        "/" => Object::Integer(Integer {
+        })),
+        "/" => Ok(Object::Integer(Integer {
             value: left.value / right.value,
-        }),
-        "<" => Object::Boolean(Boolean {
+        })),
+        "<" => Ok(Object::Boolean(Boolean {
             value: left.value < right.value,
-        }),
-        ">" => Object::Boolean(Boolean {
+        })),
+        ">" => Ok(Object::Boolean(Boolean {
             value: left.value > right.value,
-        }),
-        "==" => Object::Boolean(Boolean {
+        })),
+        "==" => Ok(Object::Boolean(Boolean {
             value: left.value == right.value,
-        }),
-        "!=" => Object::Boolean(Boolean {
+        })),
+        "!=" => Ok(Object::Boolean(Boolean {
             value: left.value != right.value,
-        }),
-        _ => Object::Null(Null {}),
+        })),
+        _ => Err(new_error(&format!("unknown operator: {}", operator,))),
     }
 }
 
@@ -81,10 +108,10 @@ pub fn eval_infix_expression(
     operator: &str,
     left: &Object,
     right: &Object,
-) -> Result<Object, String> {
+) -> Result<Object, Error> {
     match (left, right) {
         (Object::Integer(left), Object::Integer(right)) => {
-            return Ok(eval_integer_infix_expression(operator, left, right))
+            return eval_integer_infix_expression(operator, left, right)
         }
         (Object::Boolean(left), Object::Boolean(right)) => match operator {
             "==" => {
@@ -97,13 +124,36 @@ pub fn eval_infix_expression(
                     value: left.value != right.value,
                 }))
             }
-            _ => return Ok(Object::Null(Null {})),
+            _ => {
+                return Err(new_error(&format!(
+                    "unknown operator: {} {} {}",
+                    left.str_type(),
+                    operator,
+                    right.str_type()
+                )))
+            }
         },
-        _ => Ok(Object::Null(Null {})),
+        (l, r) => {
+            if l.str_type() != r.str_type() {
+                Err(new_error(&format!(
+                    "type mismatch: {} {} {}",
+                    left.str_type(),
+                    operator,
+                    right.str_type()
+                )))
+            } else {
+                Err(new_error(&format!(
+                    "unknown operator: {} {} {}",
+                    left.str_type(),
+                    operator,
+                    right.str_type()
+                )))
+            }
+        }
     }
 }
 
-pub fn eval_if_expression(exp: &IfExpression) -> Result<Object, String> {
+pub fn eval_if_expression(exp: &IfExpression) -> Result<Object, Error> {
     let condition = eval(AstNode::Expression(
         exp.condition.as_ref().expect("Not an expression"),
     ));
@@ -127,9 +177,15 @@ pub fn is_truthy(obj: &Object) -> bool {
     }
 }
 
-pub fn eval(node: AstNode) -> Result<Object, String> {
+pub fn new_error(str: &str) -> Error {
+    Error {
+        message: str.to_string(),
+    }
+}
+
+pub fn eval(node: AstNode) -> Result<Object, Error> {
     match node {
-        AstNode::Program(program) => return eval_statements(&program.statements),
+        AstNode::Program(program) => return eval_program(&program.statements),
         AstNode::Statement(statement) => match statement {
             Statement::ExpressionStatement(exp_stmt) => eval(AstNode::Expression(
                 exp_stmt
@@ -142,7 +198,6 @@ pub fn eval(node: AstNode) -> Result<Object, String> {
                 let result = eval(AstNode::Expression(
                     return_stmt.return_value.clone().unwrap().as_ref(),
                 ));
-                println!("ReturnStatement {:?}", result);
                 Ok(Object::ReturnValue(ReturnValue {
                     value: Box::new(result.expect("Not a return statement")),
                 }))
@@ -197,13 +252,15 @@ pub fn eval(node: AstNode) -> Result<Object, String> {
                     return eval_infix_expression(&infix_exp.operator, &left, &right)
                 }
                 (Err(_), _) | (_, Err(_)) => {
-                    return Err("InfixExpression with error in some arms".to_string())
+                    return Err(new_error(&format!(
+                        "InfixExpression with error in some arms"
+                    )));
                 }
             }
         }
-        AstNode::BlockStatement(block_stmt) => eval_statements(&block_stmt.statements),
+        AstNode::BlockStatement(block_stmt) => eval_block_statement(&block_stmt),
         AstNode::IfExpression(if_exp) => eval_if_expression(if_exp),
-        _ => return Err(format!("Not implemented yet")),
+        _ => return Err(new_error(&format!("Not implemented yet"))),
     }
 }
 
@@ -214,9 +271,12 @@ mod tests {
         parser::{ast_nodes::AstNode, Parser},
     };
 
-    use super::{eval, types::Object};
+    use super::{
+        eval,
+        types::{Error, Object},
+    };
 
-    fn test_eval(input: &str) -> Result<Object, String> {
+    fn test_eval(input: &str) -> Result<Object, Error> {
         let lexer = Lexer::new(input.as_bytes());
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program();
@@ -471,11 +531,55 @@ mod tests {
                 input: "9; return 2 * 5; 9;".to_string(),
                 expected: 10,
             },
+            Test {
+                input: "if (10 > 1) {
+                    if (10 > 1) {
+                      return 10;
+                    }
+                    return 1;
+                  }"
+                .to_string(),
+                expected: 10,
+            },
         ];
 
         for test in tests {
             let evaluated = test_eval(&test.input).expect("Get None instead of an Object");
             test_integer_object(&evaluated, test.expected);
+        }
+    }
+
+    #[test]
+    fn test_error_handling() {
+        struct Test {
+            input: String,
+            expected: String,
+        }
+        let tests: Vec<Test> = vec![
+            Test {
+                input: "5 + true;".to_string(),
+                expected: "type mismatch: INTEGER + BOOLEAN".to_string(),
+            },
+            Test {
+                input: "-true".to_string(),
+                expected: "unknown operator: -BOOLEAN".to_string(),
+            },
+            Test {
+                input: "5; true + false; 6".to_string(),
+                expected: "unknown operator: BOOLEAN + BOOLEAN".to_string(),
+            },
+             Test {
+                input: "if (10 > 1) { true + false; }".to_string(),
+                expected: "unknown operator: BOOLEAN + BOOLEAN".to_string(),
+            }, 
+        ];
+
+        for test in tests {
+            let evaluated = test_eval(&test.input);
+            match evaluated {
+                Ok(_) => panic!("Error expected {:?}", evaluated),
+                Err(err) => assert_eq!(err.message, test.expected),
+            }
         }
     }
 }

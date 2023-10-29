@@ -46,7 +46,7 @@ pub fn start() {
             let evaluated = eval(AstNode::Program(program));
             match evaluated {
                 Ok(evaluation) =>  println!("{}\n", evaluation.inspect()),
-                Err(err) => println!("{}\n", err)
+                Err(err) => println!("{}\n", err.message)
             }
    
         }
