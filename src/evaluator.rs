@@ -1,34 +1,45 @@
 pub mod types;
 
+
 use self::types::{Boolean, Integer, Object};
 use crate::parser::ast_nodes::{expressions::Expression, statements::Statement, AstNode};
 
-pub fn eval_statements(statements: Vec<Box<Statement>>) -> Option<Object> {
-    let mut result: Option<Object> = None;
+pub fn eval_statements(statements: Vec<Box<Statement>>) -> Result<Object, String> {
+    let mut result: Result<Object, String> = Err("No statement found".to_string());
     for statement in statements {
         result = eval(AstNode::Statement(*statement));
     }
     result
 }
 
-pub fn eval_bang_operator_expression(right: &Object) -> Option<Object> {
+pub fn eval_bang_operator_expression(right: &Object) -> Result<Object, String> {
     match right {
         Object::Boolean(value) => match value.value {
-            true => Some(Object::Boolean(Boolean { value: false })),
-            false => Some(Object::Boolean(Boolean { value: true })),
+            true => Ok(Object::Boolean(Boolean { value: false })),
+            false => Ok(Object::Boolean(Boolean { value: true })),
         },
-        _ => Some(Object::Boolean(Boolean { value: false })),
+        _ => Ok(Object::Boolean(Boolean { value: false })),
     }
 }
 
-pub fn eval_prefix_expression(operator: &str, obj: &Object) -> Option<Object> {
+pub fn eval_minus_prefix_operator_expression(right: &Object) -> Result<Object, String> {
+    match right {
+        Object::Integer(integer) => Ok(Object::Integer(Integer {
+            value: -integer.value,
+        })),
+        _ => Err(format!("Trying to evaluate a minus expression but {:?} was found in the right arm", right )),
+    }
+}
+
+pub fn eval_prefix_expression(operator: &str, obj: &Object) -> Result<Object, String> {
     match operator {
         "!" => eval_bang_operator_expression(obj),
-        _ => None,
+        "-" => eval_minus_prefix_operator_expression(obj),
+        _ => Err(format!("Wrong prefix operator: {:?}", operator)),
     }
 }
 
-pub fn eval(node: AstNode) -> Option<Object> {
+pub fn eval(node: AstNode) -> Result<Object, String> {
     match node {
         AstNode::Program(program) => return eval_statements(program.statements),
         AstNode::Statement(statement) => match statement {
@@ -38,8 +49,8 @@ pub fn eval(node: AstNode) -> Option<Object> {
                     .expect("Some expression expected!")
                     .as_ref(),
             )),
-            Statement::LetStatement(_) => None,
-            Statement::ReturnStatement(_) => None,
+            Statement::LetStatement(_) => todo!(),
+            Statement::ReturnStatement(_) => todo!(),
         },
         AstNode::Expression(expression) => match expression {
             Expression::IntegerLiteral(integer_literal) => {
@@ -57,12 +68,12 @@ pub fn eval(node: AstNode) -> Option<Object> {
             Expression::FunctionLiteral(_) => todo!(),
         },
         AstNode::IntegerLiteral(integer_literal) => {
-            return Some(Object::Integer(Integer {
+            return Ok(Object::Integer(Integer {
                 value: integer_literal.value,
             }));
         }
         AstNode::Boolean(boolean) => {
-            return Some(Object::Boolean(Boolean {
+            return Ok(Object::Boolean(Boolean {
                 value: boolean.value,
             }));
         }
@@ -78,7 +89,7 @@ pub fn eval(node: AstNode) -> Option<Object> {
                 &right.expect("Not an Object type"),
             );
         }
-        _ => return None,
+        _ => return Err(format!("Not implemented yet"))
     }
 }
 
@@ -91,14 +102,14 @@ mod tests {
 
     use super::{eval, types::Object};
 
-    fn test_eval(input: &str) -> Option<Object> {
+    fn test_eval(input: &str) -> Result<Object, String> {
         let lexer = Lexer::new(input.as_bytes());
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program();
         return eval(AstNode::Program(program));
     }
 
-    fn test_integer_object(obj: &Object, expected: u64) {
+    fn test_integer_object(obj: &Object, expected: i64) {
         match obj {
             Object::Integer(result) => assert_eq!(result.value, expected),
             _ => panic!("Not an integer object: {:?}", obj),
@@ -109,7 +120,7 @@ mod tests {
     fn test_eval_integer_expression() {
         struct Test {
             input: String,
-            expected: u64,
+            expected: i64,
         }
         let tests: Vec<Test> = vec![
             Test {
@@ -119,6 +130,14 @@ mod tests {
             Test {
                 expected: 10,
                 input: "10".to_string(),
+            },
+            Test {
+                expected: -5,
+                input: "-5".to_string(),
+            },
+            Test {
+                expected: -10,
+                input: "-10".to_string(),
             },
         ];
         for test in tests {

@@ -360,11 +360,11 @@ mod tests {
     };
 
     pub enum Expected {
-        IntExpected(u64),
+        IntExpected(i64),
         StringExpected(String),
     }
 
-    fn test_integer_literal(exp: &Option<Rc<Expression>>, value: u64) {
+    fn test_integer_literal(exp: &Option<Rc<Expression>>, value: i64) {
         match exp {
             None => panic!("No expression, got None"),
             Some(exp) => match exp.as_ref() {
@@ -599,7 +599,7 @@ mod tests {
         struct PrefixTest<'a> {
             pub exp: &'a str,
             pub operator: &'a str,
-            pub value: u64,
+            pub value: i64,
         }
 
         let test_data = vec![

@@ -21,7 +21,7 @@ pub fn parse_identifier(parser: &mut Parser) -> Option<Rc<Expression>> {
 pub fn parse_integer_literal(parser: &mut Parser) -> Option<Rc<Expression>> {
     if let Some(token) = &parser.current_token {
         let current_token = token.clone();
-        let value: Result<u64, _> = current_token.literal.parse();
+        let value: Result<i64, _> = current_token.literal.parse();
         match value {
             Ok(integer) => {
                 return Some(Rc::new(Expression::IntegerLiteral(IntegerLiteral {

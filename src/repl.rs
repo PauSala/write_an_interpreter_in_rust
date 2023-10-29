@@ -42,7 +42,7 @@ pub fn start() {
         if parser.errors.len() == 0 {
             /*  println!("{}\n", program.string()); */
             let evaluated = eval(AstNode::Program(program));
-            if let Some(evaluation) = evaluated {
+            if let Ok(evaluation) = evaluated {
                 println!("{}\n", evaluation.inspect());
             }
         }

@@ -6,7 +6,7 @@ pub trait TObject: std::fmt::Debug {
 
 #[derive(Debug)]
 pub struct Integer {
-    pub value: u64,
+    pub value: i64,
 }
 
 impl TObject for Integer {

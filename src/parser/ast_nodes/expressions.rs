@@ -22,7 +22,7 @@ impl Node for Identifier {
 #[derive(Debug)]
 pub struct IntegerLiteral {
     pub token: Token, // the token.IDENT token
-    pub value: u64,
+    pub value: i64,
 }
 
 impl Node for IntegerLiteral {
