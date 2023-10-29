@@ -1,7 +1,7 @@
 use std::{any::Any, rc::Rc};
 
 use crate::{
-    parser::ast::{self, Expression, Node, Statement},
+    parser::ast::{self, Expression, Node, NodeType, Statement},
     token::Token,
 };
 
@@ -17,6 +17,9 @@ impl Node for Identifier {
     }
     fn string(&self) -> String {
         self.value.clone()
+    }
+    fn node_type(&self) -> NodeType {
+        NodeType::Identifier
     }
 }
 
@@ -42,6 +45,9 @@ impl Node for IntegerLiteral {
     }
     fn string(&self) -> String {
         self.token.literal.to_string()
+    }
+    fn node_type(&self) -> NodeType {
+        NodeType::IntegerLiteral
     }
 }
 
@@ -75,6 +81,9 @@ impl Node for PrefixExpression {
         }
         buffer.push_str(")");
         buffer
+    }
+    fn node_type(&self) -> NodeType {
+        NodeType::PrefixExpression
     }
 }
 
@@ -115,6 +124,9 @@ impl Node for InfixExpression {
         buffer.push_str(")");
         buffer
     }
+    fn node_type(&self) -> NodeType {
+        NodeType::InfixExpression
+    }
 }
 
 impl Expression for InfixExpression {
@@ -139,6 +151,9 @@ impl Node for Boolean {
     }
     fn string(&self) -> String {
         self.token.literal.to_string()
+    }
+    fn node_type(&self) -> NodeType {
+        NodeType::Boolean
     }
 }
 
@@ -168,6 +183,9 @@ impl Node for BlockStatement {
             buffer.push_str(&statement.string())
         }
         buffer
+    }
+    fn node_type(&self) -> NodeType {
+        NodeType::BlockStatement
     }
 }
 
@@ -210,6 +228,9 @@ impl Node for IfExpression {
         }
         buffer
     }
+    fn node_type(&self) -> NodeType {
+        NodeType::IfExpression
+    }
 }
 
 impl Expression for IfExpression {
@@ -248,6 +269,9 @@ impl Node for FunctionLiteral {
         buffer.push_str(&self.body.as_ref().unwrap().string());
         buffer
     }
+    fn node_type(&self) -> NodeType {
+        NodeType::FunctionLiteral
+    }
 }
 
 impl Expression for FunctionLiteral {
@@ -284,6 +308,9 @@ impl Node for CallExpression {
         buffer.push_str(&params);
         buffer.push_str(")");
         buffer
+    }
+    fn node_type(&self) -> NodeType {
+        NodeType::CallExpression
     }
 }
 

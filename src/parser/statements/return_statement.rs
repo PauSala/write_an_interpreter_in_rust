@@ -1,5 +1,5 @@
 use crate::{
-    parser::ast::{Expression, Node, Statement},
+    parser::ast::{Expression, Node, Statement, NodeType},
     token::Token,
 };
 use std::{any::Any, rc::Rc};
@@ -23,6 +23,10 @@ impl Node for ReturnStatement {
         }
         buffer.push_str(";");
         buffer
+    }
+
+    fn node_type(&self) -> NodeType {
+        NodeType::ReturnStatement
     }
 }
 

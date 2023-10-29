@@ -1,7 +1,7 @@
 use std::{any::Any, rc::Rc};
 
 use crate::{
-    parser::ast::{Expression, Node, Statement},
+    parser::ast::{Expression, Node, Statement, NodeType},
     token::Token,
 };
 
@@ -30,6 +30,10 @@ impl Node for LetStatement {
         }
         buffer.push_str(";");
         buffer
+    }
+
+    fn node_type(&self) -> NodeType {
+        NodeType::LetStatement
     }
 }
 

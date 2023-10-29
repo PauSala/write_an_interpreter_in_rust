@@ -1,4 +1,4 @@
-use super::ast::{Node, Statement};
+use super::ast::{Node, Statement, NodeType};
 
 #[derive(Debug)]
 pub struct Program {
@@ -26,5 +26,8 @@ impl Node for Program {
             buffer.push_str(&value)
         }
         buffer
+    }
+    fn node_type(&self) -> NodeType {
+        NodeType::Program
     }
 }

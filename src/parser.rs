@@ -3,6 +3,7 @@ pub mod parser_functions;
 pub mod precedence;
 pub mod program;
 pub mod statements;
+pub mod ast_nodes;
 use std::{collections::HashMap, rc::Rc};
 
 use crate::{

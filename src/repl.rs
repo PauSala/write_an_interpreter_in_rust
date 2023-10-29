@@ -5,6 +5,13 @@ use crate::lexer::Lexer;
 use crate::parser::ast::Node;
 use crate::parser::Parser;
 
+fn print_parser_errors(errors: &Vec<String>) {
+    println!("There are some parsing errors: ");
+    for error in errors {
+        println!("\t{}", error);
+    }
+}
+
 pub fn start() {
     loop {
         print!(">> "); // Custom prompt
@@ -27,11 +34,9 @@ pub fn start() {
         let lexer = Lexer::new(input.as_bytes());
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program();
-
-        for error in parser.errors {
-            println!("\t{}\n", error);
+        print_parser_errors(&parser.errors);
+        if parser.errors.len() == 0 {
+            println!("{}\n", program.string());
         }
-
-        println!("{}\n", program.string());
     }
 }

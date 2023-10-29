@@ -1,7 +1,7 @@
 use std::{any::Any, rc::Rc};
 
 use crate::{
-    parser::ast::{Expression, Node, Statement},
+    parser::ast::{Expression, Node, Statement, NodeType},
     token::Token,
 };
 
@@ -30,5 +30,8 @@ impl Node for ExpressionStatement {
             None => "".to_string(),
             Some(value) => value.string(),
         }
+    }
+    fn node_type(&self) -> NodeType {
+        NodeType::ExpressionStatement
     }
 }
