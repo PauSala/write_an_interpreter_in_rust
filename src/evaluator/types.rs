@@ -35,10 +35,23 @@ impl TObject for Null {
     }
 }
 
+
+#[derive(Debug)]
+pub struct ReturnValue {
+    pub value: Box<Object>,
+}
+
+impl TObject for ReturnValue {
+    fn inspect(&self) -> String {
+        format!("{}", self.value.inspect())
+    }
+}
+
 #[derive(Debug)]
 pub enum Object {
     Integer(Integer),
     Boolean(Boolean),
+    ReturnValue(ReturnValue),
     Null(Null),
 }
 
@@ -47,6 +60,7 @@ impl TObject for Object {
         match self {
             Object::Integer(inner) => inner.inspect(),
             Object::Boolean(inner) => inner.inspect(),
+            Object::ReturnValue(inner) => inner.inspect(),
             Object::Null(inner) => inner.inspect(),
         }
     }

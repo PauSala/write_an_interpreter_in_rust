@@ -2,7 +2,7 @@ use super::{statements::Statement, Node};
 
 #[derive(Debug)]
 pub struct Program {
-    pub statements: Vec<Box<Statement>>,
+    pub statements: Vec<Statement>,
 }
 
 impl Program {

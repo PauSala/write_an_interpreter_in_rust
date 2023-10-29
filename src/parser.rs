@@ -332,7 +332,7 @@ impl Parser<'_> {
             }
             let statement = self.parse_statement();
             if let Some(statemet) = statement {
-                program.statements.push(statemet);
+                program.statements.push(*statemet);
             }
             self.next_token();
         }
@@ -416,12 +416,12 @@ mod tests {
         }
     }
 
-    pub fn test_let_statement(statement: &Box<Statement>, expected_identifier: &str) -> bool {
-        let token_literal = statement.as_ref().token_literal();
+    pub fn test_let_statement(statement: &Statement, expected_identifier: &str) -> bool {
+        let token_literal = statement.token_literal();
         if token_literal != "let" {
             panic!("s.TokenLiteral not 'let'. got={}", token_literal);
         }
-        match statement.as_ref() {
+        match statement {
             Statement::LetStatement(let_statement) => {
                 if let_statement.name.value != expected_identifier {
                     panic!(
@@ -500,7 +500,7 @@ mod tests {
         }
 
         for boxed in program.statements {
-            match boxed.as_ref() {
+            match boxed {
                 Statement::ReturnStatement(statement) => {
                     let token_literal = statement.token_literal();
                     if token_literal != "return" {
@@ -518,7 +518,7 @@ mod tests {
     #[test]
     pub fn it_should_build_program_string() {
         let program = Program {
-            statements: vec![Box::new(Statement::LetStatement(LetStatement {
+            statements: vec![Statement::LetStatement(LetStatement {
                 token: Token {
                     token_type: TokenType::LET,
                     literal: "let".to_string(),
@@ -537,7 +537,7 @@ mod tests {
                     },
                     value: "other_var".to_string(),
                 }))),
-            }))],
+            })],
         };
 
         assert_eq!(program.string(), "let some_var=other_var;")
@@ -551,7 +551,7 @@ mod tests {
         check_parser_errors(&mut parser);
         let program = parser.parse_program();
         assert_eq!(1, program.statements.len());
-        if let Statement::ExpressionStatement(expression) = program.statements[0].as_ref() {
+        if let Statement::ExpressionStatement(expression) = &program.statements[0] {
             if let Expression::Identifier(identifier) = expression
                 .expression
                 .as_ref()
@@ -577,7 +577,7 @@ mod tests {
         let program = parser.parse_program();
         assert_eq!(1, program.statements.len());
 
-        if let Statement::ExpressionStatement(expression) = program.statements[0].as_ref() {
+        if let Statement::ExpressionStatement(expression) = &program.statements[0] {
             if let Expression::IntegerLiteral(identifier) = expression
                 .expression
                 .as_ref()
@@ -622,7 +622,7 @@ mod tests {
             let program = parser.parse_program();
             assert_eq!(1, program.statements.len());
 
-            if let Statement::ExpressionStatement(expression) = program.statements[0].as_ref() {
+            if let Statement::ExpressionStatement(expression) = &program.statements[0] {
                 if let Expression::PrefixExpression(identifier) = expression
                     .expression
                     .as_ref()
@@ -721,7 +721,7 @@ mod tests {
             let program = parser.parse_program();
             assert_eq!(1, program.statements.len());
 
-            if let Statement::ExpressionStatement(statement) = program.statements[0].as_ref() {
+            if let Statement::ExpressionStatement(statement) = &program.statements[0] {
                 let boxed = &statement.expression;
                 test_infix_expression(boxed, test.left_value, &test.operator, test.rigth_value);
             }
@@ -776,7 +776,7 @@ mod tests {
         let program = parser.parse_program();
         assert_eq!(1, program.statements.len());
 
-        if let Statement::ExpressionStatement(statement) = program.statements[0].as_ref() {
+        if let Statement::ExpressionStatement(statement) = &program.statements[0] {
             if let Expression::FunctionLiteral(function_literal) = statement
                 .expression
                 .as_ref()
@@ -832,7 +832,7 @@ mod tests {
         let program = parser.parse_program();
         assert_eq!(1, program.statements.len());
 
-        if let Statement::ExpressionStatement(statement) = program.statements[0].as_ref() {
+        if let Statement::ExpressionStatement(statement) = &program.statements[0] {
             if let Expression::CallExpression(call_expression) = statement
                 .expression
                 .as_ref()
@@ -870,7 +870,7 @@ mod tests {
         let program = parser.parse_program();
         assert_eq!(1, program.statements.len());
 
-        if let Statement::ExpressionStatement(statement) = program.statements[0].as_ref() {
+        if let Statement::ExpressionStatement(statement) = &program.statements[0] {
             if let Expression::IfExpression(if_expression) = statement
                 .expression
                 .as_ref()

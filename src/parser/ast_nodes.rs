@@ -31,11 +31,11 @@ pub enum AstNode<'a> {
     Identifier(Identifier),
     PrefixExpression(&'a PrefixExpression),
     InfixExpression(&'a InfixExpression),
-    BlockStatement(BlockStatement),
-    IfExpression(IfExpression),
+    BlockStatement(&'a BlockStatement),
+    IfExpression(&'a IfExpression),
     FunctionLiteral(FunctionLiteral),
     CallExpression(CallExpression),
-    Statement(Statement),
+    Statement(&'a Statement),
     Expression(&'a Expression)
 }
 

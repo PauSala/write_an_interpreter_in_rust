@@ -1,12 +1,16 @@
 pub mod types;
 
 use self::types::{Boolean, Integer, Null, Object};
-use crate::parser::ast_nodes::{expressions::Expression, statements::Statement, AstNode};
+use crate::parser::ast_nodes::{
+    expressions::{Expression, IfExpression},
+    statements::Statement,
+    AstNode,
+};
 
-pub fn eval_statements(statements: Vec<Box<Statement>>) -> Result<Object, String> {
+pub fn eval_statements(statements: &Vec<Statement>) -> Result<Object, String> {
     let mut result: Result<Object, String> = Err("No statement found".to_string());
     for statement in statements {
-        result = eval(AstNode::Statement(*statement));
+        result = eval(AstNode::Statement(statement));
     }
     result
 }
@@ -77,28 +81,55 @@ pub fn eval_infix_expression(
         (Object::Integer(left), Object::Integer(right)) => {
             return Ok(eval_integer_infix_expression(operator, left, right))
         }
-        (Object::Boolean(left), Object::Boolean(right)) => {
-            match operator {
-                "==" => return Ok(Object::Boolean(Boolean {
+        (Object::Boolean(left), Object::Boolean(right)) => match operator {
+            "==" => {
+                return Ok(Object::Boolean(Boolean {
                     value: left.value == right.value,
-                })),
-                "!=" => return  Ok(Object::Boolean(Boolean {
-                    value: left.value != right.value,
-                })),
-                _ => return Ok(Object::Null(Null {})),
+                }))
             }
-        }
+            "!=" => {
+                return Ok(Object::Boolean(Boolean {
+                    value: left.value != right.value,
+                }))
+            }
+            _ => return Ok(Object::Null(Null {})),
+        },
         _ => Ok(Object::Null(Null {})),
+    }
+}
+
+pub fn eval_if_expression(exp: &IfExpression) -> Result<Object, String> {
+    let condition = eval(AstNode::Expression(
+        exp.condition.as_ref().expect("Not an expression"),
+    ));
+    let condition = condition.expect("Expected a condition");
+    if is_truthy(&condition) {
+        return eval(AstNode::BlockStatement(
+            exp.consequence.as_ref().expect("Expected an alternative"),
+        ));
+    } else if let Some(alternative) = &exp.alternative {
+        return eval(AstNode::BlockStatement(&alternative));
+    }
+
+    Ok(Object::Null(Null {}))
+}
+
+pub fn is_truthy(obj: &Object) -> bool {
+    match obj {
+        Object::Null(_) => false,
+        Object::Boolean(value) => value.value,
+        _ => true,
     }
 }
 
 pub fn eval(node: AstNode) -> Result<Object, String> {
     match node {
-        AstNode::Program(program) => return eval_statements(program.statements),
+        AstNode::Program(program) => return eval_statements(&program.statements),
         AstNode::Statement(statement) => match statement {
             Statement::ExpressionStatement(exp_stmt) => eval(AstNode::Expression(
                 exp_stmt
                     .expression
+                    .as_ref()
                     .expect("Some expression expected!")
                     .as_ref(),
             )),
@@ -109,16 +140,12 @@ pub fn eval(node: AstNode) -> Result<Object, String> {
             Expression::IntegerLiteral(integer_literal) => {
                 eval(AstNode::IntegerLiteral(integer_literal))
             }
-            Expression::PrefixExpression(prefix_expression) => {
-                eval(AstNode::PrefixExpression(prefix_expression))
-            }
+            Expression::PrefixExpression(prefix_exp) => eval(AstNode::PrefixExpression(prefix_exp)),
             Expression::Boolean(boolean) => eval(AstNode::Boolean(boolean)),
-            Expression::InfixExpression(infix_expression) => {
-                eval(AstNode::InfixExpression(infix_expression))
-            }
+            Expression::InfixExpression(infix_exp) => eval(AstNode::InfixExpression(infix_exp)),
+            Expression::IfExpression(if_exp) => eval(AstNode::IfExpression(if_exp)),
             Expression::Identifier(_) => todo!(),
-            Expression::BlockStatement(_) => todo!(),
-            Expression::IfExpression(_) => todo!(),
+            Expression::BlockStatement(block_stmt) => eval(AstNode::BlockStatement(block_stmt)),
             Expression::CallExpression(_) => todo!(),
             Expression::FunctionLiteral(_) => todo!(),
         },
@@ -161,6 +188,8 @@ pub fn eval(node: AstNode) -> Result<Object, String> {
                 }
             }
         }
+        AstNode::BlockStatement(block_stmt) =>  eval_statements(&block_stmt.statements),
+        AstNode::IfExpression(if_exp) => eval_if_expression(if_exp),
         _ => return Err(format!("Not implemented yet")),
     }
 }
@@ -360,6 +389,53 @@ mod tests {
         for test in tests {
             let evaluated = test_eval(&test.input).expect("Get None instead of an Object");
             test_boolean_object(&evaluated, test.expected);
+        }
+    }
+
+    #[test]
+    fn test_if_expressions() {
+        struct Test {
+            input: String,
+            expected: Option<i64>,
+        }
+
+        let tests: Vec<Test> = vec![
+            Test {
+                input: "if (true) { 10 }".to_string(),
+                expected: Some(10),
+            },
+            Test {
+                input: "if (false) { 10 }".to_string(),
+                expected: None,
+            },
+            Test {
+                input: "if (1) { 10 }".to_string(),
+                expected: Some(10),
+            },
+            Test {
+                input: "if (1 < 2) { 10 }".to_string(),
+                expected: Some(10),
+            },
+            Test {
+                input: "if (1 > 2) { 10 }".to_string(),
+                expected: None,
+            },
+            Test {
+                input: "if (1 > 2) { 10 } else { 20 }".to_string(),
+                expected: Some(20),
+            },
+            Test {
+                input: "if (1 < 2) { 10 } else { 20 }".to_string(),
+                expected: Some(10),
+            },
+        ];
+
+        for test in tests {
+            let evaluated = test_eval(&test.input).expect("Get None instead of an Object");
+            match test.expected {
+                Some(integer) => test_integer_object(&evaluated, integer),
+                None => (),
+            }
         }
     }
 }
