@@ -1,11 +1,14 @@
-pub mod types;
 pub mod environtment;
+pub mod types;
 
 use std::rc::Rc;
 
-use self::{types::{Boolean, Error, Integer, Null, Object, ReturnValue, Function}, environtment::Environtment};
+use self::{
+    environtment::{Environtment, enclosed_environtment},
+    types::{Boolean, Error, Function, Integer, Null, Object, ReturnValue},
+};
 use crate::parser::ast_nodes::{
-    expressions::{BlockStatement, Expression, IfExpression, Identifier},
+    expressions::{BlockStatement, Expression, Identifier, IfExpression},
     statements::Statement,
     AstNode,
 };
@@ -26,7 +29,10 @@ pub fn eval_program(statements: &Vec<Statement>, env: &mut Environtment) -> Resu
     result
 }
 
-pub fn eval_block_statement(block: &BlockStatement, env: &mut Environtment) -> Result<Object, Error> {
+pub fn eval_block_statement(
+    block: &BlockStatement,
+    env: &mut Environtment,
+) -> Result<Object, Error> {
     let mut result: Result<Object, Error> = Err(new_error(&format!("No statement found")));
     for statement in &block.statements {
         result = eval(AstNode::Statement(&statement), env);
@@ -157,14 +163,16 @@ pub fn eval_infix_expression(
 }
 
 pub fn eval_if_expression(exp: &IfExpression, env: &mut Environtment) -> Result<Object, Error> {
-    let condition = eval(AstNode::Expression(
-        exp.condition.as_ref().expect("Not an expression"),
-    ), env);
+    let condition = eval(
+        AstNode::Expression(exp.condition.as_ref().expect("Not an expression")),
+        env,
+    );
     let condition = condition.expect("Expected a condition");
     if is_truthy(&condition) {
-        return eval(AstNode::BlockStatement(
-            exp.consequence.as_ref().expect("Expected an alternative"),
-        ), env);
+        return eval(
+            AstNode::BlockStatement(exp.consequence.as_ref().expect("Expected an alternative")),
+            env,
+        );
     } else if let Some(alternative) = &exp.alternative {
         return eval(AstNode::BlockStatement(&alternative), env);
     }
@@ -186,13 +194,56 @@ pub fn new_error(str: &str) -> Error {
     }
 }
 
-pub fn eval_identifier(node: &Identifier, env: &mut Environtment) -> Result<Object, Error>{
+pub fn eval_identifier(node: &Identifier, env: &mut Environtment) -> Result<Object, Error> {
     let val = env.get(&node.value);
     match val {
         None => Err(new_error(&format!("identifier not found: {}", node.value))),
-        Some(value) => {
-            Ok(value.clone())
+        Some(value) => Ok(value.clone()),
+    }
+}
+
+pub fn eval_expressions(
+    exps: &Vec<Rc<Expression>>,
+    env: &mut Environtment,
+) -> Result<Vec<Object>, Error> {
+    let mut result: Vec<Object> = vec![];
+    for exp in exps {
+        let evaluated = eval(AstNode::Expression(&exp), env);
+        match evaluated {
+            Err(e) => return Err(e),
+            Ok(res) => result.push(res),
         }
+    }
+    Ok(result)
+}
+
+pub fn apply_function( func: &Object, args: &Vec<Object>) -> Result<Object, Error> {
+    if let Object::Function(function) = func {
+        let mut extended_env = extend_function_env(function, args);
+        let evaluated = eval(AstNode::BlockStatement(function.body.as_ref()), &mut extended_env);
+        if let Ok(object) = evaluated {
+            return unwrap_return_value(object);
+        }else{
+            Err(new_error(&format!("not an object {:?}", func.str_type())))
+        }
+    }else{
+        Err(new_error(&format!("not a function {:?}", func.str_type())))
+    }
+}
+
+pub fn extend_function_env(func: &Function, args: &Vec<Object>) -> Environtment {
+    let mut env = enclosed_environtment(func.env.clone());
+    for (index, param) in func.params.iter().enumerate() {
+        let val = &args[index];
+        env.set(&param.value, val.clone());
+    }   
+    env
+}
+
+pub fn unwrap_return_value(obj: Object) -> Result<Object, Error> {
+    match obj {
+        Object::ReturnValue(returnvalue) => Ok(*returnvalue.clone().value),
+        _ => Ok(obj)
     }
 }
 
@@ -200,31 +251,36 @@ pub fn eval(node: AstNode, env: &mut Environtment) -> Result<Object, Error> {
     match node {
         AstNode::Program(program) => return eval_program(&program.statements, env),
         AstNode::Statement(statement) => match statement {
-            Statement::ExpressionStatement(exp_stmt) => eval(AstNode::Expression(
-                exp_stmt
-                    .expression
-                    .as_ref()
-                    .expect("Some expression expected!")
-                    .as_ref(),
-            ), env),
+            Statement::ExpressionStatement(exp_stmt) => eval(
+                AstNode::Expression(
+                    exp_stmt
+                        .expression
+                        .as_ref()
+                        .expect("Some expression expected!")
+                        .as_ref(),
+                ),
+                env,
+            ),
             Statement::ReturnStatement(return_stmt) => {
-                let result = eval(AstNode::Expression(
-                    return_stmt.return_value.clone().unwrap().as_ref(),
-                ), env);
+                let result = eval(
+                    AstNode::Expression(return_stmt.return_value.clone().unwrap().as_ref()),
+                    env,
+                );
                 Ok(Object::ReturnValue(ReturnValue {
                     value: Box::new(result.expect("Not a return statement")),
                 }))
             }
             Statement::LetStatement(let_stmt) => {
-                let value = eval(AstNode::Expression(
-                    let_stmt.value.clone().unwrap().as_ref(),
-                ), env);
+                let value = eval(
+                    AstNode::Expression(let_stmt.value.clone().unwrap().as_ref()),
+                    env,
+                );
                 match value {
                     Err(err) => Err(err),
                     Ok(value) => {
                         env.set(&let_stmt.name.value, value.clone());
                         Ok(value)
-                    },
+                    }
                 }
             }
         },
@@ -232,14 +288,20 @@ pub fn eval(node: AstNode, env: &mut Environtment) -> Result<Object, Error> {
             Expression::IntegerLiteral(integer_literal) => {
                 eval(AstNode::IntegerLiteral(integer_literal), env)
             }
-            Expression::PrefixExpression(prefix_exp) => eval(AstNode::PrefixExpression(prefix_exp), env),
+            Expression::PrefixExpression(prefix_exp) => {
+                eval(AstNode::PrefixExpression(prefix_exp), env)
+            }
             Expression::Boolean(boolean) => eval(AstNode::Boolean(boolean), env),
-            Expression::InfixExpression(infix_exp) => eval(AstNode::InfixExpression(infix_exp), env),
+            Expression::InfixExpression(infix_exp) => {
+                eval(AstNode::InfixExpression(infix_exp), env)
+            }
             Expression::IfExpression(if_exp) => eval(AstNode::IfExpression(if_exp), env),
-            Expression::BlockStatement(block_stmt) => eval(AstNode::BlockStatement(block_stmt), env),
+            Expression::BlockStatement(block_stmt) => {
+                eval(AstNode::BlockStatement(block_stmt), env)
+            }
             Expression::Identifier(identifier) => eval(AstNode::Identifier(identifier), env),
             Expression::FunctionLiteral(function) => eval(AstNode::FunctionLiteral(function), env),
-            Expression::CallExpression(_) => todo!(),
+            Expression::CallExpression(call_expe) => eval(AstNode::CallExpression(call_expe), env),
         },
         AstNode::IntegerLiteral(integer_literal) => {
             return Ok(Object::Integer(Integer {
@@ -255,24 +317,29 @@ pub fn eval(node: AstNode, env: &mut Environtment) -> Result<Object, Error> {
             }));
         }
         AstNode::PrefixExpression(prefix_exp) => {
-            let right = eval(AstNode::Expression(
-                &prefix_exp
-                    .right
-                    .as_ref()
-                    .expect("No right expression found"),
-            ), env);
+            let right = eval(
+                AstNode::Expression(
+                    &prefix_exp
+                        .right
+                        .as_ref()
+                        .expect("No right expression found"),
+                ),
+                env,
+            );
             return eval_prefix_expression(
                 &prefix_exp.operator,
                 &right.expect("Not an Object type"),
             );
         }
         AstNode::InfixExpression(infix_exp) => {
-            let left = eval(AstNode::Expression(
-                infix_exp.left.as_ref().expect("Not a left Expression"),
-            ), env);
-            let right = eval(AstNode::Expression(
-                infix_exp.right.as_ref().expect("Not a left Expression"),
-            ), env);
+            let left = eval(
+                AstNode::Expression(infix_exp.left.as_ref().expect("Not a left Expression")),
+                env,
+            );
+            let right = eval(
+                AstNode::Expression(infix_exp.right.as_ref().expect("Not a left Expression")),
+                env,
+            );
 
             match (left, right) {
                 (Ok(left), Ok(right)) => {
@@ -286,17 +353,34 @@ pub fn eval(node: AstNode, env: &mut Environtment) -> Result<Object, Error> {
             }
         }
         AstNode::BlockStatement(block_stmt) => eval_block_statement(&block_stmt, env),
+        AstNode::CallExpression(call_exp) => {
+            let function = eval(AstNode::Expression(call_exp.function.as_ref()), env);
+            match function {
+                Err(fun) => return Err(fun),
+                Ok(node) => match node {
+                    Object::Function(function) => {
+                        let args = eval_expressions(&call_exp.args, env);
+                        match args {
+                            Err(e) => return Err(e),
+                            Ok(val) => {
+                                return apply_function(&Object::Function(function), &val)
+                            }
+                        }
+                    }
+                    _ => return Err(new_error("Not a function")),
+                },
+            }
+        }
         AstNode::IfExpression(if_exp) => eval_if_expression(if_exp, env),
-        AstNode::FunctionLiteral(function) =>{
+        AstNode::FunctionLiteral(function) => {
             let params = &function.parameters;
             let body = function.body.clone();
-            return Ok(Object::Function(Function{
+            return Ok(Object::Function(Function {
                 params: params.to_vec(),
                 body: Rc::new(body.unwrap()),
-                env:  Rc::new(env.to_owned()),
-            }))
-
-        },
+                env: Rc::new(env.to_owned()),
+            }));
+        }
         _ => return Err(new_error(&format!("Not implemented yet"))),
     }
 }
@@ -305,12 +389,16 @@ pub fn eval(node: AstNode, env: &mut Environtment) -> Result<Object, Error> {
 mod tests {
     use crate::{
         lexer::Lexer,
-        parser::{ast_nodes::{AstNode, Node}, Parser},
+        parser::{
+            ast_nodes::{AstNode, Node},
+            Parser,
+        },
     };
 
     use super::{
+        environtment::Environtment,
         eval,
-        types::{Error, Object}, environtment::Environtment,
+        types::{Error, Object},
     };
 
     fn test_eval(input: &str) -> Result<Object, Error> {
@@ -657,21 +745,58 @@ mod tests {
     }
 
     #[test]
-    fn test_function_object(){
+    fn test_function_object() {
         let input = "fn(x) { x + 2; };";
         let evaluated = test_eval(input);
         match evaluated {
             Err(_) => panic!("Not a function!"),
-            Ok(function) => {
-                match function {
-                    Object::Function(f) => {
-                        assert_eq!(f.params.len(), 1);
-                        assert_eq!(f.params[0].string(), "x");
-                        assert_eq!(f.body.as_ref().string(), "(x + 2)");
-                    }
-                    _ => panic!("Not a function!")    
+            Ok(function) => match function {
+                Object::Function(f) => {
+                    assert_eq!(f.params.len(), 1);
+                    assert_eq!(f.params[0].string(), "x");
+                    assert_eq!(f.body.as_ref().string(), "(x + 2)");
                 }
-            } 
+                _ => panic!("Not a function!"),
+            },
+        }
+    }
+
+    #[test]
+    fn test_function_application() {
+        struct Test {
+            input: String,
+            expected: i64,
+        }
+        let tests: Vec<Test> = vec![
+            Test {
+                input: "let identity = fn(x) { x; }; identity(5);".to_string(),
+                expected: 5,
+            },
+            Test {
+                input: "let identity = fn(x) { return x; }; identity(5);".to_string(),
+                expected: 5,
+            },
+            Test {
+                input: "let double = fn(x) { x * 2; }; double(5);".to_string(),
+                expected: 10,
+            },
+            Test {
+                input: "let add = fn(x, y) { x + y; }; add(5, 5);".to_string(),
+                expected: 10,
+            },
+            Test {
+                input: "let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));".to_string(),
+                expected: 20,
+            },
+            Test {
+                input: "fn(x) { x; }(5)".to_string(),
+                expected: 5,
+            },
+        ];
+
+        for test in tests {
+            let evaluated = test_eval(&test.input).expect("Get None instead of an Object");
+            test_integer_object(&evaluated, test.expected);
         }
     }
 }

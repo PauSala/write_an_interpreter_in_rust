@@ -34,7 +34,7 @@ pub enum AstNode<'a> {
     BlockStatement(&'a BlockStatement),
     IfExpression(&'a IfExpression),
     FunctionLiteral(&'a FunctionLiteral),
-    CallExpression(CallExpression),
+    CallExpression(&'a CallExpression),
     Statement(&'a Statement),
     Expression(&'a Expression)
 }
