@@ -36,8 +36,14 @@ pub fn eval_block_statement(
     let mut result: Result<Object, Error> = Err(new_error(&format!("No statement found")));
     for statement in &block.statements {
         result = eval(AstNode::Statement(&statement), env);
+        println!("Statement: {:?}",result);
         match &result {
-            Ok(uw) => return Ok(uw.clone()),
+            Ok(uw) => match uw {
+                Object::ReturnValue(return_value) => {
+                    return Ok(Object::ReturnValue(return_value.clone()))
+                },
+                _ => ()
+            },
             Err(_) => return result,
         }
     }
@@ -174,6 +180,7 @@ pub fn eval_if_expression(exp: &IfExpression, env: &mut Environtment) -> Result<
             env,
         );
     } else if let Some(alternative) = &exp.alternative {
+        println!("Alternative");
         return eval(AstNode::BlockStatement(&alternative), env);
     }
 
@@ -218,6 +225,7 @@ pub fn eval_expressions(
 }
 
 pub fn apply_function( func: &Object, args: &Vec<Object>) -> Result<Object, Error> {
+    println!("Appliying function");
     if let Object::Function(function) = func {
         let mut extended_env = extend_function_env(function, args);
         let evaluated = eval(AstNode::BlockStatement(function.body.as_ref()), &mut extended_env);
