@@ -1,5 +1,7 @@
+use std::cell::RefCell;
 use std::io;
 use std::io::Write;
+use std::rc::Rc;
 
 use crate::evaluator::environtment::Environtment;
 use crate::evaluator::eval;
@@ -18,7 +20,7 @@ fn print_parser_errors(errors: &Vec<String>) {
 }
 
 pub fn start() {
-    let mut env = Environtment::new();
+    let env = Rc::new(RefCell::new(Environtment::new()));
     loop {
         print!(">> "); // Custom prompt
         io::stdout().flush().expect("Failed to flush stdout");
@@ -42,7 +44,7 @@ pub fn start() {
         let program = parser.parse_program();
         print_parser_errors(&parser.errors);
         if parser.errors.len() == 0 {
-            let evaluated = eval(AstNode::Program(program), &mut env);
+            let evaluated = eval(AstNode::Program(program), env.clone());
             match evaluated {
                 Ok(evaluation) =>  println!("{}\n", evaluation.inspect()),
                 Err(err) => println!("{}\n", err.message)

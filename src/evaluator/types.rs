@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{rc::Rc, cell::RefCell};
 
 use crate::parser::ast_nodes::{
     expressions::{BlockStatement, Identifier},
@@ -52,7 +52,7 @@ impl TObject for Null {
 pub struct Function {
     pub params: Vec<Identifier>,
     pub body: Rc<BlockStatement>,
-    pub env: Rc<Environtment>,
+    pub env: Rc<RefCell<Environtment>>,
 }
 
 impl TObject for Function {
