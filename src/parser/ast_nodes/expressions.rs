@@ -101,7 +101,7 @@ impl Node for Boolean {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BlockStatement {
     pub token: Token,
     pub statements: Vec<Statement>,

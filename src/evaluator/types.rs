@@ -50,7 +50,7 @@ impl TObject for Null {
 
 #[derive(Debug, Clone)]
 pub struct Function {
-    pub params: Vec<Rc<Identifier>>,
+    pub params: Vec<Identifier>,
     pub body: Rc<BlockStatement>,
     pub env: Rc<Environtment>,
 }
@@ -104,6 +104,7 @@ pub enum Object {
     ReturnValue(ReturnValue),
     Null(Null),
     Error(Error),
+    Function(Function)
 }
 
 impl Object {
@@ -114,6 +115,7 @@ impl Object {
             Object::ReturnValue(_) => "RETURN_VALUE".to_string(),
             Object::Null(_) => "NULL".to_string(),
             Object::Error(_) => "ERROR".to_string(),
+            Object::Function(_) => "FUNCTION".to_string()
         }
     }
 }
@@ -126,6 +128,7 @@ impl TObject for Object {
             Object::ReturnValue(inner) => inner.inspect(),
             Object::Null(inner) => inner.inspect(),
             Object::Error(inner) => inner.inspect(),
+            Object::Function(inner) => inner.inspect()
         }
     }
 }

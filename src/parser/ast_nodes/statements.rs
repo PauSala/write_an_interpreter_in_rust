@@ -4,7 +4,7 @@ use crate::token::Token;
 
 use super::{expressions::{Expression, Identifier}, Node};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ExpressionStatement {
     pub token: Token,
     pub expression: Option<Rc<Expression>>,
@@ -22,7 +22,7 @@ impl Node for ExpressionStatement {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LetStatement {
     pub token: Token,
     pub name: Identifier,
@@ -48,7 +48,7 @@ impl Node for LetStatement {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ReturnStatement {
     pub token: Token,
     pub return_value: Option<Rc<Expression>>,
@@ -70,7 +70,7 @@ impl Node for ReturnStatement {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Statement {
     ExpressionStatement(ExpressionStatement),
     LetStatement(LetStatement),

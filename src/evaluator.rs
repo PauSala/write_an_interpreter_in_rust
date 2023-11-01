@@ -1,7 +1,9 @@
 pub mod types;
 pub mod environtment;
 
-use self::{types::{Boolean, Error, Integer, Null, Object, ReturnValue}, environtment::Environtment};
+use std::rc::Rc;
+
+use self::{types::{Boolean, Error, Integer, Null, Object, ReturnValue, Function}, environtment::Environtment};
 use crate::parser::ast_nodes::{
     expressions::{BlockStatement, Expression, IfExpression, Identifier},
     statements::Statement,
@@ -236,8 +238,8 @@ pub fn eval(node: AstNode, env: &mut Environtment) -> Result<Object, Error> {
             Expression::IfExpression(if_exp) => eval(AstNode::IfExpression(if_exp), env),
             Expression::BlockStatement(block_stmt) => eval(AstNode::BlockStatement(block_stmt), env),
             Expression::Identifier(identifier) => eval(AstNode::Identifier(identifier), env),
+            Expression::FunctionLiteral(function) => eval(AstNode::FunctionLiteral(function), env),
             Expression::CallExpression(_) => todo!(),
-            Expression::FunctionLiteral(_) => todo!(),
         },
         AstNode::IntegerLiteral(integer_literal) => {
             return Ok(Object::Integer(Integer {
@@ -285,6 +287,16 @@ pub fn eval(node: AstNode, env: &mut Environtment) -> Result<Object, Error> {
         }
         AstNode::BlockStatement(block_stmt) => eval_block_statement(&block_stmt, env),
         AstNode::IfExpression(if_exp) => eval_if_expression(if_exp, env),
+        AstNode::FunctionLiteral(function) =>{
+            let params = &function.parameters;
+            let body = function.body.clone();
+            return Ok(Object::Function(Function{
+                params: params.to_vec(),
+                body: Rc::new(body.unwrap()),
+                env:  Rc::new(env.to_owned()),
+            }))
+
+        },
         _ => return Err(new_error(&format!("Not implemented yet"))),
     }
 }
@@ -293,7 +305,7 @@ pub fn eval(node: AstNode, env: &mut Environtment) -> Result<Object, Error> {
 mod tests {
     use crate::{
         lexer::Lexer,
-        parser::{ast_nodes::AstNode, Parser},
+        parser::{ast_nodes::{AstNode, Node}, Parser},
     };
 
     use super::{
@@ -641,6 +653,25 @@ mod tests {
         for test in tests {
             let evaluated = test_eval(&test.input).expect("Get None instead of an Object");
             test_integer_object(&evaluated, test.expected);
+        }
+    }
+
+    #[test]
+    fn test_function_object(){
+        let input = "fn(x) { x + 2; };";
+        let evaluated = test_eval(input);
+        match evaluated {
+            Err(_) => panic!("Not a function!"),
+            Ok(function) => {
+                match function {
+                    Object::Function(f) => {
+                        assert_eq!(f.params.len(), 1);
+                        assert_eq!(f.params[0].string(), "x");
+                        assert_eq!(f.body.as_ref().string(), "(x + 2)");
+                    }
+                    _ => panic!("Not a function!")    
+                }
+            } 
         }
     }
 }
