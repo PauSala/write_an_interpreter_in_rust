@@ -1,32 +1,33 @@
 pub mod types;
+pub mod environtment;
 
-use self::types::{Boolean, Error, Integer, Null, Object, ReturnValue};
+use self::{types::{Boolean, Error, Integer, Null, Object, ReturnValue}, environtment::Environtment};
 use crate::parser::ast_nodes::{
-    expressions::{BlockStatement, Expression, IfExpression},
+    expressions::{BlockStatement, Expression, IfExpression, Identifier},
     statements::Statement,
     AstNode,
 };
 
-pub fn eval_program(statements: &Vec<Statement>) -> Result<Object, Error> {
+pub fn eval_program(statements: &Vec<Statement>, env: &mut Environtment) -> Result<Object, Error> {
     let mut result: Result<Object, Error> = Err(new_error(&format!("No statement found")));
     for statement in statements {
-        result = eval(AstNode::Statement(statement));
+        result = eval(AstNode::Statement(statement), env);
         match &result {
             Ok(uw) => {
                 if let Object::ReturnValue(value) = uw {
                     return Ok(*value.clone().value);
                 }
-            },
+            }
             Err(_) => return result,
         }
     }
     result
 }
 
-pub fn eval_block_statement(block: &BlockStatement) -> Result<Object, Error> {
+pub fn eval_block_statement(block: &BlockStatement, env: &mut Environtment) -> Result<Object, Error> {
     let mut result: Result<Object, Error> = Err(new_error(&format!("No statement found")));
     for statement in &block.statements {
-        result = eval(AstNode::Statement(&statement));
+        result = eval(AstNode::Statement(&statement), env);
         match &result {
             Ok(uw) => return Ok(uw.clone()),
             Err(_) => return result,
@@ -153,17 +154,17 @@ pub fn eval_infix_expression(
     }
 }
 
-pub fn eval_if_expression(exp: &IfExpression) -> Result<Object, Error> {
+pub fn eval_if_expression(exp: &IfExpression, env: &mut Environtment) -> Result<Object, Error> {
     let condition = eval(AstNode::Expression(
         exp.condition.as_ref().expect("Not an expression"),
-    ));
+    ), env);
     let condition = condition.expect("Expected a condition");
     if is_truthy(&condition) {
         return eval(AstNode::BlockStatement(
             exp.consequence.as_ref().expect("Expected an alternative"),
-        ));
+        ), env);
     } else if let Some(alternative) = &exp.alternative {
-        return eval(AstNode::BlockStatement(&alternative));
+        return eval(AstNode::BlockStatement(&alternative), env);
     }
 
     Ok(Object::Null(Null {}))
@@ -183,9 +184,19 @@ pub fn new_error(str: &str) -> Error {
     }
 }
 
-pub fn eval(node: AstNode) -> Result<Object, Error> {
+pub fn eval_identifier(node: &Identifier, env: &mut Environtment) -> Result<Object, Error>{
+    let val = env.get(&node.value);
+    match val {
+        None => Err(new_error(&format!("identifier not found: {}", node.value))),
+        Some(value) => {
+            Ok(value.clone())
+        }
+    }
+}
+
+pub fn eval(node: AstNode, env: &mut Environtment) -> Result<Object, Error> {
     match node {
-        AstNode::Program(program) => return eval_program(&program.statements),
+        AstNode::Program(program) => return eval_program(&program.statements, env),
         AstNode::Statement(statement) => match statement {
             Statement::ExpressionStatement(exp_stmt) => eval(AstNode::Expression(
                 exp_stmt
@@ -193,27 +204,38 @@ pub fn eval(node: AstNode) -> Result<Object, Error> {
                     .as_ref()
                     .expect("Some expression expected!")
                     .as_ref(),
-            )),
+            ), env),
             Statement::ReturnStatement(return_stmt) => {
                 let result = eval(AstNode::Expression(
                     return_stmt.return_value.clone().unwrap().as_ref(),
-                ));
+                ), env);
                 Ok(Object::ReturnValue(ReturnValue {
                     value: Box::new(result.expect("Not a return statement")),
                 }))
             }
-            Statement::LetStatement(_) => todo!(),
+            Statement::LetStatement(let_stmt) => {
+                let value = eval(AstNode::Expression(
+                    let_stmt.value.clone().unwrap().as_ref(),
+                ), env);
+                match value {
+                    Err(err) => Err(err),
+                    Ok(value) => {
+                        env.set(&let_stmt.name.value, value.clone());
+                        Ok(value)
+                    },
+                }
+            }
         },
         AstNode::Expression(expression) => match expression {
             Expression::IntegerLiteral(integer_literal) => {
-                eval(AstNode::IntegerLiteral(integer_literal))
+                eval(AstNode::IntegerLiteral(integer_literal), env)
             }
-            Expression::PrefixExpression(prefix_exp) => eval(AstNode::PrefixExpression(prefix_exp)),
-            Expression::Boolean(boolean) => eval(AstNode::Boolean(boolean)),
-            Expression::InfixExpression(infix_exp) => eval(AstNode::InfixExpression(infix_exp)),
-            Expression::IfExpression(if_exp) => eval(AstNode::IfExpression(if_exp)),
-            Expression::BlockStatement(block_stmt) => eval(AstNode::BlockStatement(block_stmt)),
-            Expression::Identifier(_) => todo!(),
+            Expression::PrefixExpression(prefix_exp) => eval(AstNode::PrefixExpression(prefix_exp), env),
+            Expression::Boolean(boolean) => eval(AstNode::Boolean(boolean), env),
+            Expression::InfixExpression(infix_exp) => eval(AstNode::InfixExpression(infix_exp), env),
+            Expression::IfExpression(if_exp) => eval(AstNode::IfExpression(if_exp), env),
+            Expression::BlockStatement(block_stmt) => eval(AstNode::BlockStatement(block_stmt), env),
+            Expression::Identifier(identifier) => eval(AstNode::Identifier(identifier), env),
             Expression::CallExpression(_) => todo!(),
             Expression::FunctionLiteral(_) => todo!(),
         },
@@ -221,6 +243,9 @@ pub fn eval(node: AstNode) -> Result<Object, Error> {
             return Ok(Object::Integer(Integer {
                 value: integer_literal.value,
             }));
+        }
+        AstNode::Identifier(identifier) => {
+            return eval_identifier(identifier, env);
         }
         AstNode::Boolean(boolean) => {
             return Ok(Object::Boolean(Boolean {
@@ -233,7 +258,7 @@ pub fn eval(node: AstNode) -> Result<Object, Error> {
                     .right
                     .as_ref()
                     .expect("No right expression found"),
-            ));
+            ), env);
             return eval_prefix_expression(
                 &prefix_exp.operator,
                 &right.expect("Not an Object type"),
@@ -242,10 +267,10 @@ pub fn eval(node: AstNode) -> Result<Object, Error> {
         AstNode::InfixExpression(infix_exp) => {
             let left = eval(AstNode::Expression(
                 infix_exp.left.as_ref().expect("Not a left Expression"),
-            ));
+            ), env);
             let right = eval(AstNode::Expression(
                 infix_exp.right.as_ref().expect("Not a left Expression"),
-            ));
+            ), env);
 
             match (left, right) {
                 (Ok(left), Ok(right)) => {
@@ -258,8 +283,8 @@ pub fn eval(node: AstNode) -> Result<Object, Error> {
                 }
             }
         }
-        AstNode::BlockStatement(block_stmt) => eval_block_statement(&block_stmt),
-        AstNode::IfExpression(if_exp) => eval_if_expression(if_exp),
+        AstNode::BlockStatement(block_stmt) => eval_block_statement(&block_stmt, env),
+        AstNode::IfExpression(if_exp) => eval_if_expression(if_exp, env),
         _ => return Err(new_error(&format!("Not implemented yet"))),
     }
 }
@@ -273,14 +298,15 @@ mod tests {
 
     use super::{
         eval,
-        types::{Error, Object},
+        types::{Error, Object}, environtment::Environtment,
     };
 
     fn test_eval(input: &str) -> Result<Object, Error> {
         let lexer = Lexer::new(input.as_bytes());
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program();
-        return eval(AstNode::Program(program));
+        let mut env = Environtment::new();
+        return eval(AstNode::Program(program), &mut env);
     }
 
     fn test_integer_object(obj: &Object, expected: i64) {
@@ -568,10 +594,14 @@ mod tests {
                 input: "5; true + false; 6".to_string(),
                 expected: "unknown operator: BOOLEAN + BOOLEAN".to_string(),
             },
-             Test {
+            Test {
                 input: "if (10 > 1) { true + false; }".to_string(),
                 expected: "unknown operator: BOOLEAN + BOOLEAN".to_string(),
-            }, 
+            },
+            Test {
+                input: "foobar".to_string(),
+                expected: "identifier not found: foobar".to_string(),
+            },
         ];
 
         for test in tests {
@@ -580,6 +610,37 @@ mod tests {
                 Ok(_) => panic!("Error expected {:?}", evaluated),
                 Err(err) => assert_eq!(err.message, test.expected),
             }
+        }
+    }
+
+    #[test]
+    fn test_let_statements() {
+        struct Test {
+            input: String,
+            expected: i64,
+        }
+        let tests: Vec<Test> = vec![
+            Test {
+                input: "let a = 5; a;".to_string(),
+                expected: 5,
+            },
+            Test {
+                input: "let a = 5 * 5; a;".to_string(),
+                expected: 25,
+            },
+            Test {
+                input: "let a = 5; let b = a; b;".to_string(),
+                expected: 5,
+            },
+            Test {
+                input: "let a = 5; let b = a; let c = a + b + 5; c;".to_string(),
+                expected: 15,
+            },
+        ];
+
+        for test in tests {
+            let evaluated = test_eval(&test.input).expect("Get None instead of an Object");
+            test_integer_object(&evaluated, test.expected);
         }
     }
 }

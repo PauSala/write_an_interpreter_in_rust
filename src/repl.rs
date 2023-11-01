@@ -1,6 +1,7 @@
 use std::io;
 use std::io::Write;
 
+use crate::evaluator::environtment::Environtment;
 use crate::evaluator::eval;
 use crate::evaluator::types::TObject;
 use crate::lexer::Lexer;
@@ -19,6 +20,7 @@ fn print_parser_errors(errors: &Vec<String>) {
 }
 
 pub fn start() {
+    let mut env = Environtment::new();
     loop {
         print!(">> "); // Custom prompt
         io::stdout().flush().expect("Failed to flush stdout");
@@ -43,7 +45,7 @@ pub fn start() {
         print_parser_errors(&parser.errors);
         if parser.errors.len() == 0 {
             println!("{}\n", program.string()); 
-            let evaluated = eval(AstNode::Program(program));
+            let evaluated = eval(AstNode::Program(program), &mut env);
             match evaluated {
                 Ok(evaluation) =>  println!("{}\n", evaluation.inspect()),
                 Err(err) => println!("{}\n", err.message)

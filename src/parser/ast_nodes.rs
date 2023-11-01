@@ -28,7 +28,7 @@ pub enum AstNode<'a> {
     Boolean(&'a Boolean),
     LetStatement(LetStatement),
     ReturnStatement(&'a ReturnStatement),
-    Identifier(Identifier),
+    Identifier(&'a Identifier),
     PrefixExpression(&'a PrefixExpression),
     InfixExpression(&'a InfixExpression),
     BlockStatement(&'a BlockStatement),

@@ -1,3 +1,11 @@
+use std::rc::Rc;
+
+use crate::parser::ast_nodes::{
+    expressions::{BlockStatement, Identifier},
+    Node,
+};
+
+use super::environtment::Environtment;
 
 pub trait TObject: std::fmt::Debug {
     fn inspect(&self) -> String;
@@ -19,7 +27,7 @@ pub struct Boolean {
     pub value: bool,
 }
 
-impl Boolean{
+impl Boolean {
     pub fn str_type(&self) -> String {
         "BOOLEAN".to_string()
     }
@@ -37,6 +45,33 @@ pub struct Null {}
 impl TObject for Null {
     fn inspect(&self) -> String {
         format!("NULL")
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Function {
+    pub params: Vec<Rc<Identifier>>,
+    pub body: Rc<BlockStatement>,
+    pub env: Rc<Environtment>,
+}
+
+impl TObject for Function {
+    fn inspect(&self) -> String {
+        let mut buffer = String::new();
+
+        buffer.push_str("fn");
+        buffer.push_str("(");
+        let params = &self
+            .params
+            .iter()
+            .map(|p| p.string())
+            .collect::<Vec<String>>()
+            .join(",");
+        buffer.push_str(params);
+        buffer.push_str(") {\n");
+        buffer.push_str(&self.body.string());
+        buffer.push_str("\n");
+        buffer
     }
 }
 
